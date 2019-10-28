@@ -338,6 +338,7 @@ class NavigationBase extends React.Component {
       <MenuItem
         component={Link}
         onClick={onClick}
+        id={`${title.toLowerCase()}-button`}
         to={api.prefixLink(path)}
         className={classes.navMenuItem}
         selected={isCurrentPage(path)}>
@@ -389,6 +390,7 @@ class NavigationBase extends React.Component {
 
         <MenuList>
           <Button
+            id="namespace-selection-button"
             variant="contained"
             className={classes.namespaceChangeButton}
             size="large"
@@ -403,6 +405,7 @@ class NavigationBase extends React.Component {
             onClose={this.handleNamespaceMenuClick}>
             <MenuItem
               value="all"
+              id="_all-namespace-option"
               onClick={e => this.handleNamespaceChange(e, "_all")}>
                   All Namespaces
             </MenuItem>
@@ -411,6 +414,7 @@ class NavigationBase extends React.Component {
 
             {namespaces.map(ns => (
               <MenuItem
+                id={`${ns.name}-namespace-option`}
                 onClick={e => this.handleNamespaceChange(e, ns.name)}
                 key={ns.name}>
                 {ns.name}
@@ -520,7 +524,7 @@ class NavigationBase extends React.Component {
             {drawer}
           </Drawer>
           <AppBar >
-            <Toolbar>
+            <Toolbar id="toolbar">
               <Typography variant="h6" color="inherit"  className={classes.breadcrumbs} noWrap>
                 <BreadcrumbHeader  {...this.props} />
               </Typography>

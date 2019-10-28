@@ -17,7 +17,7 @@ class NamespaceConfirmationModal extends React.Component {
         <Dialog
           open={open}
           onClose={this.handleClose}>
-          <DialogTitle>
+          <DialogTitle id="form-dialog-title">
             Change namespace?
           </DialogTitle>
           <DialogContent>
@@ -26,10 +26,10 @@ class NamespaceConfirmationModal extends React.Component {
             </DialogContentText>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleConfirmNamespaceChange} color="primary">
+            <Button id="confirm-namespace-change" onClick={handleConfirmNamespaceChange} color="primary">
               Yes
             </Button>
-            <Button onClick={handleDialogCancel} variant="text">
+            <Button id="cancel-namespace-change" onClick={handleDialogCancel} variant="text">
               No
             </Button>
           </DialogActions>
