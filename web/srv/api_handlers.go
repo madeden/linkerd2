@@ -19,6 +19,8 @@ import (
 	"github.com/linkerd/linkerd2/pkg/protohttp"
 	"github.com/linkerd/linkerd2/pkg/tap"
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
 )
 
 // Control Frame payload size can be no bigger than 125 bytes. 2 bytes are
@@ -309,4 +311,40 @@ func (h *handler) handleAPIEdges(w http.ResponseWriter, req *http.Request, p htt
 		return
 	}
 	renderJSONPb(w, result)
+}
+
+func (h *handler) handleAPIResourceDefinition(w http.ResponseWriter, req *http.Request, p httprouter.Params) {
+	namespace := p.ByName("namespace")
+	kind := p.ByName("kind")
+	name := p.ByName("name")
+
+	var resource interface{}
+	var err error
+	options := metav1.GetOptions{}
+	switch kind {
+	case "daemonsets", "ds":
+		resource, err = h.k8sAPI.AppsV1().DaemonSets(namespace).Get(name, options)
+	case "deployments", "deploy":
+		resource, err = h.k8sAPI.AppsV1().Deployments(namespace).Get(name, options)
+	case "jobs":
+		resource, err = h.k8sAPI.BatchV1().Jobs(namespace).Get(name, options)
+	case "pods", "po":
+		resource, err = h.k8sAPI.CoreV1().Pods(namespace).Get(name, options)
+	case "replicationcontrollers", "rc":
+		resource, err = h.k8sAPI.CoreV1().ReplicationControllers(namespace).Get(name, options)
+	case "replicasets", "rs":
+		resource, err = h.k8sAPI.AppsV1().ReplicaSets(namespace).Get(name, options)
+	}
+	if err != nil {
+		renderJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	resourceDefinition, err := yaml.Marshal(resource)
+	if err != nil {
+		renderJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/yaml")
+	w.Write(resourceDefinition)
 }

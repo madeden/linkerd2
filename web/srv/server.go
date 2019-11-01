@@ -165,6 +165,7 @@ func NewServer(
 	server.router.GET("/api/tap", handler.handleAPITap)
 	server.router.GET("/api/routes", handler.handleAPITopRoutes)
 	server.router.GET("/api/edges", handler.handleAPIEdges)
+	server.router.GET("/api/namespaces/:namespace/:kind/:name", handler.handleAPIResourceDefinition)
 
 	// grafana proxy
 	server.router.DELETE("/grafana/*grafanapath", handler.handleGrafana)
