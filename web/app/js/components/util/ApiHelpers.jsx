@@ -68,13 +68,20 @@ const ApiHelpers = (pathPrefix, defaultMetricsWindow = '1m') => {
     "1h": "1 hour"
   };
 
-  // for getting json api results
+  // for getting api results
   const apiFetch = path => {
     if (!_isEmpty(pathPrefix)) {
       path = `${pathPrefix}${path}`;
     }
 
-    return makeCancelable(fetch(path), r => r.json());
+    return makeCancelable(fetch(path), r => {
+      switch (r.headers.get("Content-Type")) {
+        case "text/yaml":
+          return r.text();
+        default:
+          return r.json();
+      }
+    });
   };
 
   // for getting non-json results
@@ -113,6 +120,10 @@ const ApiHelpers = (pathPrefix, defaultMetricsWindow = '1m') => {
 
   const fetchEdges = (namespace, resourceType) => {
     return apiFetch(edgesPath + "?resource_type=" + resourceType + "&namespace=" + namespace);
+  };
+
+  const fetchResourceDefinition = (namespace, resourceType, resourceName) => {
+    return apiFetch(`/api/namespaces/${namespace}/${resourceType}/${resourceName}`);
   };
 
   const getMetricsWindow = () => metricsWindow;
@@ -230,6 +241,7 @@ const ApiHelpers = (pathPrefix, defaultMetricsWindow = '1m') => {
     fetchPods,
     fetchServices,
     fetchEdges,
+    fetchResourceDefinition,
     getMetricsWindow,
     setMetricsWindow,
     getValidMetricsWindows: () => Object.keys(validMetricsWindows),

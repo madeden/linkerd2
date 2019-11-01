@@ -293,4 +293,15 @@ describe('ApiHelpers', () => {
       expect(url).toEqual('/api/tps-reports?resource_type=sts&all_namespaces=true&tcp_stats=true');
     })
   });
+
+  describe('fetchResourceDefinition', () => {
+    it('fetches the resource definition from the api', () => {
+      const [namespace, type, name] = ["namespace", "type", "name"];
+      api = ApiHelpers();
+      api.fetchResourceDefinition(namespace, type, name);
+
+      expect(fetchStub.calledOnce).toBeTruthy;
+      expect(fetchStub.args[0][0]).toEqual(`/api/namespaces/${namespace}/${type}/${name}`);
+    });
+  });
 });

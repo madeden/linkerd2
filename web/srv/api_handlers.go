@@ -322,17 +322,17 @@ func (h *handler) handleAPIResourceDefinition(w http.ResponseWriter, req *http.R
 	var err error
 	options := metav1.GetOptions{}
 	switch kind {
-	case "daemonsets", "ds":
+	case "daemonset":
 		resource, err = h.k8sAPI.AppsV1().DaemonSets(namespace).Get(name, options)
-	case "deployments", "deploy":
+	case "deployment":
 		resource, err = h.k8sAPI.AppsV1().Deployments(namespace).Get(name, options)
-	case "jobs":
+	case "job":
 		resource, err = h.k8sAPI.BatchV1().Jobs(namespace).Get(name, options)
-	case "pods", "po":
+	case "pod":
 		resource, err = h.k8sAPI.CoreV1().Pods(namespace).Get(name, options)
-	case "replicationcontrollers", "rc":
+	case "replicationcontroller":
 		resource, err = h.k8sAPI.CoreV1().ReplicationControllers(namespace).Get(name, options)
-	case "replicasets", "rs":
+	case "replicaset":
 		resource, err = h.k8sAPI.AppsV1().ReplicaSets(namespace).Get(name, options)
 	default:
 		renderJSONError(w, errors.New("invalid resource kind"), http.StatusBadRequest)

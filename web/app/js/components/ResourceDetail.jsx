@@ -149,7 +149,9 @@ export class ResourceDetailBase extends React.Component {
         // downstream resources of this resource (meshed traffic only)
         this.api.fetchMetrics(
           `${this.api.urlsForResource("all")}&from_name=${resource.name}&from_type=${resource.type}&from_namespace=${resource.namespace}`
-        )
+        ),
+        // definition for this resource
+        this.api.fetchResourceDefinition(resource.namespace, resource.type, resource.name),
       ];
 
     if (_indexOf(edgeDataAvailable, resource.type) > 0) {
@@ -161,11 +163,12 @@ export class ResourceDetailBase extends React.Component {
     this.api.setCurrentRequests(apiRequests);
 
     Promise.all(this.api.getCurrentPromises())
-      .then(([resourceRsp, podListRsp, podMetricsRsp, upstreamRsp, downstreamRsp, edgesRsp]) => {
+      .then(([resourceRsp, podListRsp, podMetricsRsp, upstreamRsp, downstreamRsp, resourceDefinitionRsp, edgesRsp]) => {
         let resourceMetrics = processSingleResourceRollup(resourceRsp, resource.type);
         let podMetrics = processSingleResourceRollup(podMetricsRsp, resource.type);
         let upstreamMetrics = processMultiResourceRollup(upstreamRsp, resource.type);
         let downstreamMetrics = processMultiResourceRollup(downstreamRsp, resource.type);
+        let resourceDefinition = resourceDefinitionRsp;
         let edges = processEdges(edgesRsp, this.state.resource.name);
 
         // INEFFICIENT: get metrics for all the pods belonging to this resource.
@@ -227,6 +230,7 @@ export class ResourceDetailBase extends React.Component {
           upstreamMetrics,
           downstreamMetrics,
           edges,
+          resourceDefinition, // eslint-disable-line react/no-unused-state
           lastMetricReceivedTime,
           isTcpOnly,
           isTrafficSplit,
