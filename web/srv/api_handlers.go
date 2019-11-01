@@ -334,6 +334,9 @@ func (h *handler) handleAPIResourceDefinition(w http.ResponseWriter, req *http.R
 		resource, err = h.k8sAPI.CoreV1().ReplicationControllers(namespace).Get(name, options)
 	case "replicasets", "rs":
 		resource, err = h.k8sAPI.AppsV1().ReplicaSets(namespace).Get(name, options)
+	default:
+		renderJSONError(w, errors.New("invalid resource kind"), http.StatusBadRequest)
+		return
 	}
 	if err != nil {
 		renderJSONError(w, err, http.StatusInternalServerError)
