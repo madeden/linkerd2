@@ -315,27 +315,29 @@ func (h *handler) handleAPIEdges(w http.ResponseWriter, req *http.Request, p htt
 
 func (h *handler) handleAPIResourceDefinition(w http.ResponseWriter, req *http.Request, p httprouter.Params) {
 	namespace := p.ByName("namespace")
-	kind := p.ByName("kind")
-	name := p.ByName("name")
+	resourceType := p.ByName("resource-type")
+	resourceName := p.ByName("resource-name")
 
 	var resource interface{}
 	var err error
 	options := metav1.GetOptions{}
-	switch kind {
-	case "daemonset":
-		resource, err = h.k8sAPI.AppsV1().DaemonSets(namespace).Get(name, options)
-	case "deployment":
-		resource, err = h.k8sAPI.AppsV1().Deployments(namespace).Get(name, options)
-	case "job":
-		resource, err = h.k8sAPI.BatchV1().Jobs(namespace).Get(name, options)
-	case "pod":
-		resource, err = h.k8sAPI.CoreV1().Pods(namespace).Get(name, options)
-	case "replicationcontroller":
-		resource, err = h.k8sAPI.CoreV1().ReplicationControllers(namespace).Get(name, options)
-	case "replicaset":
-		resource, err = h.k8sAPI.AppsV1().ReplicaSets(namespace).Get(name, options)
+	switch resourceType {
+	case k8s.DaemonSet:
+		resource, err = h.k8sAPI.AppsV1().DaemonSets(namespace).Get(resourceName, options)
+	case k8s.Deployment:
+		resource, err = h.k8sAPI.AppsV1().Deployments(namespace).Get(resourceName, options)
+	case k8s.Job:
+		resource, err = h.k8sAPI.BatchV1().Jobs(namespace).Get(resourceName, options)
+	case k8s.Pod:
+		resource, err = h.k8sAPI.CoreV1().Pods(namespace).Get(resourceName, options)
+	case k8s.ReplicationController:
+		resource, err = h.k8sAPI.CoreV1().ReplicationControllers(namespace).Get(resourceName, options)
+	case k8s.ReplicaSet:
+		resource, err = h.k8sAPI.AppsV1().ReplicaSets(namespace).Get(resourceName, options)
+	case k8s.TrafficSplit:
+		resource, err = h.k8sAPI.TsClient.SplitV1alpha1().TrafficSplits(namespace).Get(resourceName, options)
 	default:
-		renderJSONError(w, errors.New("invalid resource kind"), http.StatusBadRequest)
+		renderJSONError(w, errors.New("Invalid resource type: "+resourceType), http.StatusBadRequest)
 		return
 	}
 	if err != nil {
