@@ -322,6 +322,8 @@ func (h *handler) handleAPIResourceDefinition(w http.ResponseWriter, req *http.R
 	var err error
 	options := metav1.GetOptions{}
 	switch resourceType {
+	case k8s.CronJob:
+		resource, err = h.k8sAPI.BatchV1beta1().CronJobs(namespace).Get(resourceName, options)
 	case k8s.DaemonSet:
 		resource, err = h.k8sAPI.AppsV1().DaemonSets(namespace).Get(resourceName, options)
 	case k8s.Deployment:
