@@ -84,7 +84,8 @@ export class ResourceDetailBase extends React.Component {
       resourceIsMeshed: true,
       pendingRequests: false,
       loaded: false,
-      error: null
+      error: null,
+      queryForDefinition: false,
     };
   }
 
@@ -150,9 +151,12 @@ export class ResourceDetailBase extends React.Component {
         this.api.fetchMetrics(
           `${this.api.urlsForResource("all")}&from_name=${resource.name}&from_type=${resource.type}&from_namespace=${resource.namespace}`
         ),
-        // definition for this resource
-        this.api.fetchResourceDefinition(resource.namespace, resource.type, resource.name),
       ];
+
+    if (!this.state.queryForDefinition) {
+      // definition for this resource
+      apiRequests.push(this.api.fetchResourceDefinition(resource.namespace, resource.type, resource.name));
+    }
 
     if (_indexOf(edgeDataAvailable, resource.type) > 0) {
       apiRequests = apiRequests.concat([
@@ -163,13 +167,24 @@ export class ResourceDetailBase extends React.Component {
     this.api.setCurrentRequests(apiRequests);
 
     Promise.all(this.api.getCurrentPromises())
-      .then(([resourceRsp, podListRsp, podMetricsRsp, upstreamRsp, downstreamRsp, resourceDefinitionRsp, edgesRsp]) => {
+      .then(results => {
+        const [resourceRsp, podListRsp, podMetricsRsp, upstreamRsp, downstreamRsp, ...rsp] = [...results];
         let resourceMetrics = processSingleResourceRollup(resourceRsp, resource.type);
         let podMetrics = processSingleResourceRollup(podMetricsRsp, resource.type);
         let upstreamMetrics = processMultiResourceRollup(upstreamRsp, resource.type);
         let downstreamMetrics = processMultiResourceRollup(downstreamRsp, resource.type);
-        let resourceDefinition = resourceDefinitionRsp;
-        let edges = processEdges(edgesRsp, this.state.resource.name);
+
+        let resourceDefinition = undefined;
+        if (!this.state.queryForDefinition) {
+          const resourceDefinitionRsp = rsp[0];
+          resourceDefinition = resourceDefinitionRsp;
+        }
+
+        let edges = [];
+        if (_indexOf(edgeDataAvailable, resource.type) > 0) {
+          const edgesRsp = rsp[rsp.length - 1];
+          edges = processEdges(edgesRsp, this.state.resource.name);
+        }
 
         // INEFFICIENT: get metrics for all the pods belonging to this resource.
         // Do this by querying for metrics for all pods in this namespace and then filtering
@@ -237,7 +252,8 @@ export class ResourceDetailBase extends React.Component {
           loaded: true,
           pendingRequests: false,
           error: null,
-          unmeshedSources: this.unmeshedSources // in place of debouncing, just update this when we update the rest of the state
+          unmeshedSources: this.unmeshedSources, // in place of debouncing, just update this when we update the rest of the state
+          queryForDefinition: true,
         });
       })
       .catch(this.handleApiError);
