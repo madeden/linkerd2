@@ -2367,6 +2367,7 @@ spec:
   template:
     metadata:
       annotations:
+        linkerd.io/helm-release-version: "0"
         CreatedByAnnotation: CliVersion
         linkerd.io/identity-mode: default
         linkerd.io/proxy-version: ProxyVersion
@@ -2599,6 +2600,7 @@ spec:
   template:
     metadata:
       annotations:
+        linkerd.io/helm-release-version: "0"
         CreatedByAnnotation: CliVersion
         linkerd.io/identity-mode: default
         linkerd.io/proxy-version: ProxyVersion
@@ -2812,6 +2814,7 @@ spec:
   template:
     metadata:
       annotations:
+        linkerd.io/helm-release-version: "0"
         CreatedByAnnotation: CliVersion
         linkerd.io/identity-mode: default
         linkerd.io/proxy-version: ProxyVersion

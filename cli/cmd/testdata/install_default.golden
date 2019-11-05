@@ -2373,6 +2373,7 @@ spec:
   template:
     metadata:
       annotations:
+        linkerd.io/helm-release-version: "0"
         linkerd.io/created-by: linkerd/cli dev-undefined
         linkerd.io/identity-mode: default
         linkerd.io/proxy-version: install-proxy-version
@@ -2606,6 +2607,7 @@ spec:
   template:
     metadata:
       annotations:
+        linkerd.io/helm-release-version: "0"
         linkerd.io/created-by: linkerd/cli dev-undefined
         linkerd.io/identity-mode: default
         linkerd.io/proxy-version: install-proxy-version
@@ -2820,6 +2822,7 @@ spec:
   template:
     metadata:
       annotations:
+        linkerd.io/helm-release-version: "0"
         linkerd.io/created-by: linkerd/cli dev-undefined
         linkerd.io/identity-mode: default
         linkerd.io/proxy-version: install-proxy-version

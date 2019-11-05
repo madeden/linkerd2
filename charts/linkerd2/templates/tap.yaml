@@ -49,6 +49,7 @@ spec:
   template:
     metadata:
       annotations:
+        linkerd.io/helm-release-version: {{ $.Release.Revision | quote}}
         {{.CreatedByAnnotation}}: {{default (printf "linkerd/helm %s" .LinkerdVersion) .CliVersion}}
         {{- include "partials.proxy.annotations" .Proxy| nindent 8}}
       labels:
