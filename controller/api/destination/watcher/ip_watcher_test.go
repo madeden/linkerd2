@@ -340,8 +340,8 @@ spec:
 			k8sConfigs:                       []string{},
 			host:                             "192.168.210.92",
 			port:                             5959,
-			expectedAddresses:                []string{},
-			expectedNoEndpoints:              true,
+			expectedAddresses:                []string{"192.168.210.92:5959"},
+			expectedNoEndpoints:              false,
 			expectedNoEndpointsServiceExists: false,
 			expectedError:                    false,
 		},
@@ -383,6 +383,32 @@ metadata:
 status:
   phase: Running
   podIP: 172.17.0.20`,
+			},
+			host: "172.17.0.12",
+			port: 8989,
+			expectedAddresses: []string{
+				"172.17.0.12:8989",
+			},
+			expectedNoEndpoints:              false,
+			expectedNoEndpointsServiceExists: false,
+			expectedError:                    false,
+		},
+		{
+			serviceType: "pod with hostNetwork",
+			k8sConfigs: []string{`
+apiVersion: v1
+kind: Pod
+metadata:
+  name: name1-1
+  namespace: ns
+  ownerReferences:
+  - kind: ReplicaSet
+    name: rs-1
+spec:
+  hostNetwork: true
+status:
+  phase: Running
+  podIP: 172.17.0.12`,
 			},
 			host: "172.17.0.12",
 			port: 8989,
