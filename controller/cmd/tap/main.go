@@ -14,8 +14,11 @@ import (
 	"github.com/linkerd/linkerd2/pkg/config"
 	"github.com/linkerd/linkerd2/pkg/flags"
 	pkgK8s "github.com/linkerd/linkerd2/pkg/k8s"
+	"github.com/linkerd/linkerd2/pkg/trace"
 	log "github.com/sirupsen/logrus"
 )
+
+const defaultDomain = "cluster.local"
 
 // Main executes the tap subcommand
 func Main(args []string) {
@@ -29,6 +32,8 @@ func Main(args []string) {
 	tlsCertPath := cmd.String("tls-cert", pkgK8s.MountPathTLSCrtPEM, "path to TLS Cert PEM")
 	tlsKeyPath := cmd.String("tls-key", pkgK8s.MountPathTLSKeyPEM, "path to TLS Key PEM")
 	disableCommonNames := cmd.Bool("disable-common-names", false, "disable checks for Common Names (for development)")
+
+	traceCollector := flags.AddTraceFlags(cmd)
 
 	flags.ConfigureAndParse(cmd, args)
 
@@ -46,6 +51,7 @@ func Main(args []string) {
 		k8s.RC,
 		k8s.Svc,
 		k8s.RS,
+		k8s.Node,
 	)
 	if err != nil {
 		log.Fatalf("Failed to initialize K8s API: %s", err)
@@ -55,13 +61,18 @@ func Main(args []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	clusterDomain := globalConfig.GetClusterDomain()
-	if clusterDomain == "" {
-		clusterDomain = "cluster.local"
+	trustDomain := globalConfig.GetIdentityContext().GetTrustDomain()
+	if trustDomain == "" {
+		trustDomain = defaultDomain
 	}
-	log.Info("Using cluster domain: ", clusterDomain)
+	log.Infof("Using trust domain: %s", trustDomain)
 
-	grpcTapServer := tap.NewGrpcTapServer(*tapPort, *controllerNamespace, clusterDomain, k8sAPI)
+	if *traceCollector != "" {
+		if err := trace.InitializeTracing("linkerd-tap", *traceCollector); err != nil {
+			log.Warnf("failed to initialize tracing: %s", err)
+		}
+	}
+	grpcTapServer := tap.NewGrpcTapServer(*tapPort, *controllerNamespace, trustDomain, k8sAPI)
 
 	// TODO: make this configurable for local development
 	cert, err := tls.LoadX509KeyPair(*tlsCertPath, *tlsKeyPath)

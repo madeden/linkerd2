@@ -169,15 +169,15 @@ const (
 	// injected.
 	ProxyEnableDebugAnnotation = ProxyConfigAnnotationsPrefix + "/enable-debug-sidecar"
 
-	// ProxyTraceCollectorSvcAddr can be used to enable tracing on a proxy.
+	// ProxyTraceCollectorSvcAddrAnnotation can be used to enable tracing on a proxy.
 	// It takes the collector service name (e.g. oc-collector.tracing:55678) as
 	// its value.
-	ProxyTraceCollectorSvcAddr = ProxyConfigAnnotationsPrefix + "/trace-collector"
+	ProxyTraceCollectorSvcAddrAnnotation = ProxyConfigAnnotationsPrefix + "/trace-collector"
 
-	// ProxyTraceCollectorSvcAccount is used to specify the service account
+	// ProxyTraceCollectorSvcAccountAnnotation is used to specify the service account
 	// associated with the trace collector. It is used to create the service's
 	// mTLS identity.
-	ProxyTraceCollectorSvcAccount = "config.alpha.linkerd.io/trace-collector-service-account"
+	ProxyTraceCollectorSvcAccountAnnotation = "config.alpha.linkerd.io/trace-collector-service-account"
 
 	// IdentityModeDefault is assigned to IdentityModeAnnotation to
 	// use the control plane's default identity scheme.
@@ -213,11 +213,17 @@ const (
 	// IdentityIssuerSecretName is the name of the Secret that stores issuer credentials.
 	IdentityIssuerSecretName = "linkerd-identity-issuer"
 
+	// IdentityIssuerSchemeLinkerd is the issuer secret scheme used by linkerd
+	IdentityIssuerSchemeLinkerd = "linkerd.io/tls"
+
 	// IdentityIssuerKeyName is the issuer's private key file.
 	IdentityIssuerKeyName = "key.pem"
 
 	// IdentityIssuerCrtName is the issuer's certificate file.
 	IdentityIssuerCrtName = "crt.pem"
+
+	// IdentityIssuerTrustAnchorsNameExternal is the issuer's certificate file (when using cert-manager).
+	IdentityIssuerTrustAnchorsNameExternal = "ca.crt"
 
 	// ProxyPortName is the name of the Linkerd Proxy's proxy port.
 	ProxyPortName = "linkerd-proxy"

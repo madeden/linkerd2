@@ -17,11 +17,13 @@ import (
 	"github.com/linkerd/linkerd2/pkg/config"
 	"github.com/linkerd/linkerd2/pkg/healthcheck"
 	"github.com/linkerd/linkerd2/pkg/k8s"
+	consts "github.com/linkerd/linkerd2/pkg/k8s"
 	"github.com/linkerd/linkerd2/pkg/tls"
 	"github.com/linkerd/linkerd2/pkg/version"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -48,6 +50,7 @@ type (
 		skipChecks                  bool
 		omitWebhookSideEffects      bool
 		restrictDashboardPrivileges bool
+		controlPlaneTracing         bool
 		identityOptions             *installIdentityOptions
 		*proxyConfigOptions
 
@@ -66,6 +69,7 @@ type (
 		clockSkewAllowance time.Duration
 
 		trustPEMFile, crtPEMFile, keyPEMFile string
+		identityExternalIssuer               bool
 	}
 )
 
@@ -96,8 +100,8 @@ If you are sure you'd like to have a fresh install, remove these resources with:
 Otherwise, you can use the --ignore-cluster flag to overwrite the existing global resources.
 `
 
-	errMsgLinkerdConfigConfigMapNotFound = "Can't install the Linkerd control plane in the '%s' namespace. Reason: %s.\nIf this is expected, use the --ignore-cluster flag to continue the installation.\n"
-	errMsgGlobalResourcesMissing         = "Can't install the Linkerd control plane in the '%s' namespace. The required Linkerd global resources are missing.\nIf this is expected, use the --skip-checks flag to continue the installation.\n"
+	errMsgLinkerdConfigResourceConflict = "Can't install the Linkerd control plane in the '%s' namespace. Reason: %s.\nIf this is expected, use the --ignore-cluster flag to continue the installation.\n"
+	errMsgGlobalResourcesMissing        = "Can't install the Linkerd control plane in the '%s' namespace. The required Linkerd global resources are missing.\nIf this is expected, use the --skip-checks flag to continue the installation.\n"
 )
 
 var (
@@ -173,6 +177,7 @@ func newInstallOptionsWithDefaults() (*installOptions, error) {
 		noInitContainer:             defaults.NoInitContainer,
 		omitWebhookSideEffects:      defaults.OmitWebhookSideEffects,
 		restrictDashboardPrivileges: defaults.RestrictDashboardPrivileges,
+		controlPlaneTracing:         defaults.ControlPlaneTracing,
 		proxyConfigOptions: &proxyConfigOptions{
 			proxyVersion:           version.Version,
 			ignoreCluster:          false,
@@ -196,9 +201,10 @@ func newInstallOptionsWithDefaults() (*installOptions, error) {
 			enableExternalProfiles: defaults.Proxy.EnableExternalProfiles,
 		},
 		identityOptions: &installIdentityOptions{
-			trustDomain:        defaults.Identity.TrustDomain,
-			issuanceLifetime:   issuanceLifetime,
-			clockSkewAllowance: clockSkewAllowance,
+			trustDomain:            defaults.Identity.TrustDomain,
+			issuanceLifetime:       issuanceLifetime,
+			clockSkewAllowance:     clockSkewAllowance,
+			identityExternalIssuer: false,
 		},
 
 		generateUUID: func() string {
@@ -250,15 +256,16 @@ resources for the Linkerd control plane. This command should be followed by
   # Install Linkerd into a non-default namespace.
   linkerd install config -l linkerdtest | kubectl apply -f -`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := errAfterRunningChecks(options); err != nil && !options.ignoreCluster {
-				if healthcheck.IsCategoryError(err, healthcheck.KubernetesAPIChecks) {
-					fmt.Fprintf(os.Stderr, errMsgCannotInitializeClient, err)
-				} else {
-					fmt.Fprintf(os.Stderr, errMsgGlobalResourcesExist, err)
+			if !options.ignoreCluster {
+				if err := errAfterRunningChecks(options); err != nil {
+					if healthcheck.IsCategoryError(err, healthcheck.KubernetesAPIChecks) {
+						fmt.Fprintf(os.Stderr, errMsgCannotInitializeClient, err)
+					} else {
+						fmt.Fprintf(os.Stderr, errMsgGlobalResourcesExist, err)
+					}
+					os.Exit(1)
 				}
-				os.Exit(1)
 			}
-
 			return installRunE(options, configStage, parentFlags)
 		},
 	}
@@ -289,20 +296,25 @@ control plane. It should be run after "linkerd install config".`,
   # Install Linkerd into a non-default namespace.
   linkerd install control-plane -l linkerdtest | kubectl apply -f -`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// check if global resources exist to determine if the `install config`
-			// stage succeeded
-			if err := errAfterRunningChecks(options); err == nil && !options.skipChecks {
-				if healthcheck.IsCategoryError(err, healthcheck.KubernetesAPIChecks) {
-					fmt.Fprintf(os.Stderr, errMsgCannotInitializeClient, err)
-				} else {
-					fmt.Fprintf(os.Stderr, errMsgGlobalResourcesMissing, controlPlaneNamespace)
+			if !options.skipChecks {
+				// check if global resources exist to determine if the `install config`
+				// stage succeeded
+				if err := errAfterRunningChecks(options); err == nil {
+					if healthcheck.IsCategoryError(err, healthcheck.KubernetesAPIChecks) {
+						fmt.Fprintf(os.Stderr, errMsgCannotInitializeClient, err)
+					} else {
+						fmt.Fprintf(os.Stderr, errMsgGlobalResourcesMissing, controlPlaneNamespace)
+					}
+					os.Exit(1)
 				}
-				os.Exit(1)
 			}
 
-			if err := errIfLinkerdConfigConfigMapExists(); err != nil && !options.ignoreCluster {
-				fmt.Fprintf(os.Stderr, errMsgLinkerdConfigConfigMapNotFound, controlPlaneNamespace, err.Error())
-				os.Exit(1)
+			if !options.ignoreCluster {
+				if err := errIfLinkerdConfigConfigMapExists(); err != nil {
+					fmt.Fprintf(os.Stderr, errMsgLinkerdConfigResourceConflict, controlPlaneNamespace, err.Error())
+					os.Exit(1)
+				}
+
 			}
 
 			return installRunE(options, controlPlaneStage, flags)
@@ -350,13 +362,15 @@ control plane.`,
   # Installation may also be broken up into two stages by user privilege, via
   # subcommands.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := errAfterRunningChecks(options); err != nil && !options.ignoreCluster {
-				if healthcheck.IsCategoryError(err, healthcheck.KubernetesAPIChecks) {
-					fmt.Fprintf(os.Stderr, errMsgCannotInitializeClient, err)
-				} else {
-					fmt.Fprintf(os.Stderr, errMsgGlobalResourcesExist, err)
+			if !options.ignoreCluster {
+				if err := errAfterRunningChecks(options); err != nil {
+					if healthcheck.IsCategoryError(err, healthcheck.KubernetesAPIChecks) {
+						fmt.Fprintf(os.Stderr, errMsgCannotInitializeClient, err)
+					} else {
+						fmt.Fprintf(os.Stderr, errMsgGlobalResourcesExist, err)
+					}
+					os.Exit(1)
 				}
-				os.Exit(1)
 			}
 
 			return installRunE(options, "", flags)
@@ -453,9 +467,14 @@ func (options *installOptions) recordableFlagSet() *pflag.FlagSet {
 		&options.omitWebhookSideEffects, "omit-webhook-side-effects", options.omitWebhookSideEffects,
 		"Omit the sideEffects flag in the webhook manifests, This flag must be provided during install or upgrade for Kubernetes versions pre 1.12",
 	)
+	flags.BoolVar(
+		&options.controlPlaneTracing, "control-plane-tracing", options.controlPlaneTracing,
+		"Enables Control Plane Tracing with the defaults",
+	)
 
 	flags.StringVarP(&options.controlPlaneVersion, "control-plane-version", "", options.controlPlaneVersion, "(Development) Tag to be used for the control plane component images")
 	flags.MarkHidden("control-plane-version")
+	flags.MarkHidden("control-plane-tracing")
 
 	return flags
 }
@@ -474,7 +493,6 @@ func (options *installOptions) allStageFlagSet() *pflag.FlagSet {
 		&options.restrictDashboardPrivileges, "restrict-dashboard-privileges", options.restrictDashboardPrivileges,
 		"Restrict the Linkerd Dashboard's default privileges to disallow Tap",
 	)
-
 	return flags
 }
 
@@ -503,7 +521,10 @@ func (options *installOptions) installOnlyFlagSet() *pflag.FlagSet {
 		&options.identityOptions.keyPEMFile, "identity-issuer-key-file", options.identityOptions.keyPEMFile,
 		"A path to a PEM-encoded file containing the Linkerd Identity issuer private key (generated by default)",
 	)
-
+	flags.BoolVar(
+		&options.identityOptions.identityExternalIssuer, "identity-external-issuer", options.identityOptions.identityExternalIssuer,
+		"Whether to use an external identity issuer (default false)",
+	)
 	return flags
 }
 
@@ -541,6 +562,10 @@ func (options *installOptions) recordFlags(flags *pflag.FlagSet) {
 }
 
 func (options *installOptions) validate() error {
+	if options.ignoreCluster && options.identityOptions.identityExternalIssuer {
+		return errors.New("--ignore-cluster is not supported when --identity-external-issuer=true")
+	}
+
 	if options.controlPlaneVersion != "" && !alphaNumDashDot.MatchString(options.controlPlaneVersion) {
 		return fmt.Errorf("%s is not a valid version", options.controlPlaneVersion)
 	}
@@ -630,6 +655,7 @@ func (options *installOptions) buildValuesWithoutIdentity(configs *pb.All) (*cha
 	installValues.ControllerLogLevel = options.controllerLogLevel
 	installValues.ControllerReplicas = options.controllerReplicas
 	installValues.ControllerUID = options.controllerUID
+	installValues.ControlPlaneTracing = options.controlPlaneTracing
 	installValues.EnableH2Upgrade = !options.disableH2Upgrade
 	installValues.EnablePodAntiAffinity = options.highAvailability
 	installValues.HighAvailability = options.highAvailability
@@ -898,6 +924,19 @@ func errIfLinkerdConfigConfigMapExists() error {
 	return fmt.Errorf("'linkerd-config' config map already exists")
 }
 
+func checkFilesExist(files []string) error {
+	for _, f := range files {
+		stat, err := os.Stat(f)
+		if err != nil {
+			return fmt.Errorf("missing file: %s", err)
+		}
+		if stat.IsDir() {
+			return fmt.Errorf("not a file: %s", f)
+		}
+	}
+	return nil
+}
+
 func (idopts *installIdentityOptions) validate() error {
 	if idopts == nil {
 		return nil
@@ -909,24 +948,33 @@ func (idopts *installIdentityOptions) validate() error {
 		}
 	}
 
-	if idopts.trustPEMFile != "" || idopts.crtPEMFile != "" || idopts.keyPEMFile != "" {
-		if idopts.trustPEMFile == "" {
-			return errors.New("a trust anchors file must be specified if other credentials are provided")
-		}
-		if idopts.crtPEMFile == "" {
-			return errors.New("a certificate file must be specified if other credentials are provided")
-		}
-		if idopts.keyPEMFile == "" {
-			return errors.New("a private key file must be specified if other credentials are provided")
+	if idopts.identityExternalIssuer {
+
+		if idopts.crtPEMFile != "" {
+			return errors.New("--identity-issuer-certificate-file must not be specified if --identity-external-issuer=true")
 		}
 
-		for _, f := range []string{idopts.trustPEMFile, idopts.crtPEMFile, idopts.keyPEMFile} {
-			stat, err := os.Stat(f)
-			if err != nil {
-				return fmt.Errorf("missing file: %s", err)
+		if idopts.keyPEMFile != "" {
+			return errors.New("--identity-issuer-key-file must not be specified if --identity-external-issuer=true")
+		}
+
+		if idopts.trustPEMFile != "" {
+			return errors.New("--identity-trust-anchors-file must not be specified if --identity-external-issuer=true")
+		}
+
+	} else {
+		if idopts.trustPEMFile != "" || idopts.crtPEMFile != "" || idopts.keyPEMFile != "" {
+			if idopts.trustPEMFile == "" {
+				return errors.New("a trust anchors file must be specified if other credentials are provided")
 			}
-			if stat.IsDir() {
-				return fmt.Errorf("not a file: %s", f)
+			if idopts.crtPEMFile == "" {
+				return errors.New("a certificate file must be specified if other credentials are provided")
+			}
+			if idopts.keyPEMFile == "" {
+				return errors.New("a private key file must be specified if other credentials are provided")
+			}
+			if err := checkFilesExist([]string{idopts.trustPEMFile, idopts.crtPEMFile, idopts.keyPEMFile}); err != nil {
+				return err
 			}
 		}
 	}
@@ -943,11 +991,13 @@ func (idopts *installIdentityOptions) validateAndBuild() (*charts.Identity, erro
 		return nil, err
 	}
 
-	if idopts.trustPEMFile != "" && idopts.crtPEMFile != "" && idopts.keyPEMFile != "" {
+	if idopts.identityExternalIssuer {
+		return idopts.readExternallyManaged()
+	} else if idopts.trustPEMFile != "" && idopts.crtPEMFile != "" && idopts.keyPEMFile != "" {
 		return idopts.readValues()
+	} else {
+		return idopts.genValues()
 	}
-
-	return idopts.genValues()
 }
 
 func (idopts *installIdentityOptions) issuerName() string {
@@ -964,6 +1014,7 @@ func (idopts *installIdentityOptions) genValues() (*charts.Identity, error) {
 		TrustDomain:     idopts.trustDomain,
 		TrustAnchorsPEM: root.Cred.Crt.EncodeCertificatePEM(),
 		Issuer: &charts.Issuer{
+			Scheme:              consts.IdentityIssuerSchemeLinkerd,
 			ClockSkewAllowance:  idopts.clockSkewAllowance.String(),
 			IssuanceLifetime:    idopts.issuanceLifetime.String(),
 			CrtExpiry:           root.Cred.Crt.Certificate.NotAfter,
@@ -974,6 +1025,84 @@ func (idopts *installIdentityOptions) genValues() (*charts.Identity, error) {
 			},
 		},
 	}, nil
+}
+
+type externalIssuerData struct {
+	trustAnchors string
+	issuerCrt    string
+	issuerKey    string
+}
+
+func loadExternalIssuerData() (*externalIssuerData, error) {
+	kubeAPI, err := k8s.NewAPI(kubeconfigPath, kubeContext, impersonate, 0)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching external issuer config: %s", err)
+	}
+
+	secret, err := kubeAPI.CoreV1().Secrets(controlPlaneNamespace).Get(k8s.IdentityIssuerSecretName, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	keyMissingError := "key %s containing the %s needs to exist in secret %s if --identity-external-issuer=true"
+
+	anchors, ok := secret.Data[consts.IdentityIssuerTrustAnchorsNameExternal]
+	if !ok {
+		return nil, fmt.Errorf(keyMissingError, consts.IdentityIssuerTrustAnchorsNameExternal, "trust anchors", consts.IdentityIssuerSecretName)
+	}
+
+	crt, ok := secret.Data[corev1.TLSCertKey]
+	if !ok {
+		return nil, fmt.Errorf(keyMissingError, corev1.TLSCertKey, "issuer certificate", consts.IdentityIssuerSecretName)
+	}
+
+	key, ok := secret.Data[corev1.TLSPrivateKeyKey]
+	if !ok {
+		return nil, fmt.Errorf(keyMissingError, corev1.TLSPrivateKeyKey, "issuer key", consts.IdentityIssuerSecretName)
+	}
+
+	return &externalIssuerData{string(anchors), string(crt), string(key)}, nil
+}
+
+func (idopts *installIdentityOptions) verifyCred(creds *tls.Cred, trustAnchors string) error {
+	roots, err := tls.DecodePEMCertPool(trustAnchors)
+	if err != nil {
+		return err
+	}
+
+	if err := creds.Verify(roots, idopts.issuerName()); err != nil {
+		return fmt.Errorf("invalid credentials: %s", err)
+	}
+	return nil
+}
+
+func (idopts *installIdentityOptions) readExternallyManaged() (*charts.Identity, error) {
+
+	externalIssuerData, err := loadExternalIssuerData()
+	if err != nil {
+		return nil, err
+	}
+
+	creds, err := tls.ValidateAndCreateCreds(externalIssuerData.issuerCrt, externalIssuerData.issuerKey)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA from %s: %s", consts.IdentityIssuerSecretName, err)
+	}
+
+	if err := idopts.verifyCred(creds, externalIssuerData.trustAnchors); err != nil {
+		return nil, err
+	}
+
+	return &charts.Identity{
+		TrustDomain:     idopts.trustDomain,
+		TrustAnchorsPEM: externalIssuerData.trustAnchors,
+		Issuer: &charts.Issuer{
+			Scheme:             string(corev1.SecretTypeTLS),
+			ClockSkewAllowance: idopts.clockSkewAllowance.String(),
+			IssuanceLifetime:   idopts.issuanceLifetime.String(),
+		},
+	}, nil
+
 }
 
 // readValues attempts to read an issuer configuration from disk
@@ -991,19 +1120,16 @@ func (idopts *installIdentityOptions) readValues() (*charts.Identity, error) {
 		return nil, err
 	}
 	trustAnchorsPEM := string(trustb)
-	roots, err := tls.DecodePEMCertPool(trustAnchorsPEM)
-	if err != nil {
-		return nil, err
-	}
 
-	if err := creds.Verify(roots, idopts.issuerName()); err != nil {
-		return nil, fmt.Errorf("invalid credentials: %s", err)
+	if err := idopts.verifyCred(creds, trustAnchorsPEM); err != nil {
+		return nil, err
 	}
 
 	return &charts.Identity{
 		TrustDomain:     idopts.trustDomain,
 		TrustAnchorsPEM: trustAnchorsPEM,
 		Issuer: &charts.Issuer{
+			Scheme:              consts.IdentityIssuerSchemeLinkerd,
 			ClockSkewAllowance:  idopts.clockSkewAllowance.String(),
 			IssuanceLifetime:    idopts.issuanceLifetime.String(),
 			CrtExpiry:           creds.Crt.Certificate.NotAfter,
@@ -1036,5 +1162,6 @@ func toIdentityContext(idvals *charts.Identity) *pb.IdentityContext {
 		TrustAnchorsPem:    idvals.TrustAnchorsPEM,
 		IssuanceLifetime:   ptypes.DurationProto(il),
 		ClockSkewAllowance: ptypes.DurationProto(csa),
+		Scheme:             idvals.Issuer.Scheme,
 	}
 }
