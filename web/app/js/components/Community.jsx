@@ -1,15 +1,26 @@
-import Iframe from 'react-iframe';
+import PropTypes from 'prop-types';
 import React from 'react';
+import { withStyles } from '@material-ui/core/styles';
 
-const Community = () => {
+const styles = () => ({
+  iframe: {
+    border: "0px",
+    height: "calc(100vh - 112px)", // 112px = Header height 64px + padding 24px * 2
+    width: "100%",
+  },
+});
+
+const Community = ({classes}) => {
   return (
-    <Iframe
-      url="https://linkerd.io/dashboard/"
-      position="inherit"
-      display="block"
-      height="100vh"
-      border="none" />
+    <iframe
+      title="Community"
+      src="https://linkerd.io/dashboard/"
+      className={classes.iframe} />
   );
 };
 
-export default Community;
+Community.propTypes = {
+  classes: PropTypes.shape({}).isRequired,
+};
+
+export default withStyles(styles)(Community);
