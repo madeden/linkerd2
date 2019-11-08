@@ -14,6 +14,7 @@ import (
 	"github.com/linkerd/linkerd2/pkg/admin"
 	"github.com/linkerd/linkerd2/pkg/config"
 	"github.com/linkerd/linkerd2/pkg/flags"
+	"github.com/linkerd/linkerd2/pkg/healthcheck"
 	"github.com/linkerd/linkerd2/pkg/k8s"
 	pkgK8s "github.com/linkerd/linkerd2/pkg/k8s"
 	"github.com/linkerd/linkerd2/pkg/trace"
@@ -60,11 +61,11 @@ func main() {
 		log.Fatalf("failed to construct Kubernetes API client: [%s]", err)
 	}
 
-	installConfig, err := config.Install(pkgK8s.MountPathInstallConfig)
+	cm, _, err := healthcheck.FetchLinkerdConfigMap(k8sAPI, *controllerNamespace)
 	if err != nil {
-		log.Warnf("failed to load uuid from install config: [%s] (disregard warning if running in development mode)", err)
+		log.Errorf("Failed to fetch linkerd-config: %s", err)
 	}
-	uuid := installConfig.GetUuid()
+	uuid := string(cm.GetUID())
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
