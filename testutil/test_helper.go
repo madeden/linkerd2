@@ -93,7 +93,7 @@ func NewTestHelper() *TestHelper {
 			releaseName: *helmReleaseName,
 			tillerNs:    *tillerNs,
 		},
-		clusterDomain: *clusterDomain,
+		clusterDomain:  *clusterDomain,
 		externalIssuer: *externalIssuer,
 	}
 
