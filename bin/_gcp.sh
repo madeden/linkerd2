@@ -19,16 +19,16 @@ set_gcloud_project() {
     project="$1"
     zone="$2"
 
+    gcloud auth activate-service-account --key-file .gcp.json
     gcloud config set core/project "$project"
     gcloud config set compute/zone "$zone"
 }
 
-set_gcloud_config() {
+set_gcloud_cluster() {
     project="$1"
     zone="$2"
     cluster="$3"
 
-    gcloud auth activate-service-account --key-file .gcp.json
     set_gcloud_project "$project" "$zone"
     gcloud config set container/cluster "$cluster"
 }

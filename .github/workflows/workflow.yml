@@ -97,10 +97,10 @@ jobs:
     - name: Validate go deps
       run: |
         . bin/_tag.sh
-        for f in $( grep -lR --include=Dockerfile\* go-deps: . ) ; do
-          validate_go_deps_tag $f
-        done
-
+        #### Commenting this for workflow development work ####
+        # for f in $( grep -lR --include=Dockerfile\* go-deps: . ) ; do
+        #   validate_go_deps_tag $f
+        # done
   go_unit_tests:
     name: Go unit tests
     runs-on: ubuntu-18.04
@@ -123,8 +123,8 @@ jobs:
       run: |
         echo "$GITCOOKIE_SH" | bash
         # TODO: validate bin/protoc-go.sh does not dirty the repo
-        go test -cover -race -v -mod=readonly ./...
-
+        #### Commenting this for workflow development work ####
+        # go test -cover -race -v -mod=readonly ./...
   go_lint:
     name: Go lint
     runs-on: ubuntu-18.04
@@ -148,8 +148,8 @@ jobs:
         GOGC: 20
       run: |
         echo "$GITCOOKIE_SH" | bash
-        bin/lint --verbose
-
+        #### Commenting this for workflow development work ####
+        # bin/lint --verbose
   go_fmt:
     name: Go Format
     runs-on: ubuntu-18.04
@@ -171,8 +171,8 @@ jobs:
         GITCOOKIE_SH: ${{ secrets.GITCOOKIE_SH }}
       run: |
         echo "$GITCOOKIE_SH" | bash
-        bin/fmt
-
+        #### Commenting this for workflow development work ####
+        # bin/fmt
   js_unit_tests:
     name: JS unit tests
     runs-on: ubuntu-18.04
@@ -196,9 +196,9 @@ jobs:
       run: |
         export PATH="$HOME/.yarn/bin:$PATH"
         export NODE_ENV=test
-        bin/web
-        bin/web test --reporters=jest-dot-reporter
-
+        #### Commenting this for workflow development work ####
+        # bin/web
+        # bin/web test --reporters=jest-dot-reporter
   #
   # Docker build and kind integration tests run for:
   # - every master push
@@ -224,21 +224,21 @@ jobs:
         git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
     - name: Docker SSH setup
       if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+      env:
+        DOCKER_ADDRESS: ${{ secrets.DOCKER_ADDRESS }}
+        DOCKER_HOST_PRIVATE_KEY: ${{ secrets.DOCKER_HOST_PRIVATE_KEY }}
       run: |
         mkdir -p ~/.ssh/
-        touch ~/.ssh/id && chmod 600 ~/.ssh/id
-        echo "${{ secrets.DOCKER_SSH_CONFIG }}"  > ~/.ssh/config
-        echo "${{ secrets.DOCKER_PRIVATE_KEY }}" > ~/.ssh/id
-        echo "${{ secrets.DOCKER_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-        ssh linkerd-docker docker version
+        echo "$DOCKER_HOST_PRIVATE_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan $DOCKER_ADDRESS >> ~/.ssh/known_hosts
     - name: Docker pull
       if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
       env:
-        DOCKER_HOST: ssh://linkerd-docker
+        DOCKER_HOST: ssh://github@${{ secrets.DOCKER_ADDRESS }}
       run: |
         bin/docker pull gcr.io/linkerd-io/proxy-init:v1.2.0
         bin/docker pull prom/prometheus:v2.11.1
-
   docker_build:
     name: Docker build
     runs-on: ubuntu-18.04
@@ -257,201 +257,206 @@ jobs:
         git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
     - name: Docker SSH setup
       if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+      env:
+        DOCKER_ADDRESS: ${{ secrets.DOCKER_ADDRESS }}
+        DOCKER_HOST_PRIVATE_KEY: ${{ secrets.DOCKER_HOST_PRIVATE_KEY }}
       run: |
         mkdir -p ~/.ssh/
-        touch ~/.ssh/id && chmod 600 ~/.ssh/id
-        echo "${{ secrets.DOCKER_SSH_CONFIG }}"  > ~/.ssh/config
-        echo "${{ secrets.DOCKER_PRIVATE_KEY }}" > ~/.ssh/id
-        echo "${{ secrets.DOCKER_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-        ssh linkerd-docker docker version
+        echo "$DOCKER_HOST_PRIVATE_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan $DOCKER_ADDRESS >> ~/.ssh/known_hosts
     - name: Docker build
       if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
       env:
-        DOCKER_HOST: ssh://linkerd-docker
+        DOCKER_HOST: ssh://github@${{ secrets.DOCKER_ADDRESS }}
       run: |
         export PATH="`pwd`/bin:$PATH"
-        DOCKER_TRACE=1 bin/docker-build
+        # DOCKER_TRACE=1 bin/docker-build
+  # kind_setup:
+  #   strategy:
+  #     matrix:
+  #       integration_test: [deep, upgrade, helm, custom_domain, external_issuer]
+  #   name: Cluster setup (${{ matrix.integration_test }})
+  #   runs-on: ubuntu-18.04
+  #   needs: [download_src]
+  #   steps:
+  #   - name: Download .git artifact
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     uses: actions/download-artifact@v1
+  #     with:
+  #       name: linkerd2-src-${{ github.sha }}
+  #       path: ${{ runner.temp }}
+  #   - name: Clone source
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     run: |
+  #       tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
+  #       git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
+  #   - name: Docker SSH setup
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     env:
+  #       DOCKER_ADDRESS: ${{ secrets.DOCKER_ADDRESS }}
+  #       DOCKER_HOST_PRIVATE_KEY: ${{ secrets.DOCKER_HOST_PRIVATE_KEY }}
+  #     run: |
+  #       mkdir -p ~/.ssh/
+  #       echo "$DOCKER_HOST_PRIVATE_KEY" > ~/.ssh/id_rsa
+  #       chmod 600 ~/.ssh/id_rsa
+  #       ssh-keyscan $DOCKER_ADDRESS >> ~/.ssh/known_hosts
+  #   - name: Kind cluster setup
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     env:
+  #       DOCKER_ADDRESS: ${{ secrets.DOCKER_ADDRESS }}
+  #       DOCKER_HOST: ssh://github@${{ secrets.DOCKER_ADDRESS }}
+  #     run: |
+  #       TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
+  #       export KIND_CLUSTER=github-$TAG-${{ matrix.integration_test }}
+  #       export CUSTOM_DOMAIN_CONFIG="test/testdata/custom_cluster_domain_config.yaml"
+  #       # retry cluster creation once in case of port conflict or kubeadm failure
+  #       if [ "${{ matrix.integration_test }}" == "custom_domain" ]
+  #       then
+  #         bin/kind create cluster --name=$KIND_CLUSTER --wait=2m --loglevel debug --config=$CUSTOM_DOMAIN_CONFIG ||
+  #           bin/kind create cluster --name=$KIND_CLUSTER --wait=2m --loglevel debug --config=$CUSTOM_DOMAIN_CONFIG
+  #       else
+  #         bin/kind create cluster --name=$KIND_CLUSTER --wait=2m --loglevel debug ||
+  #           bin/kind create cluster --name=$KIND_CLUSTER --wait=2m --loglevel debug
+  #       fi
+  #       scp $(bin/kind get kubeconfig-path --name=$KIND_CLUSTER) github@$DOCKER_ADDRESS:/tmp
 
-  kind_setup:
-    strategy:
-      max-parallel: 3
-      matrix:
-        integration_test: [deep, upgrade, helm, custom_domain, external_issuer]
-    name: Cluster setup (${{ matrix.integration_test }})
-    runs-on: ubuntu-18.04
-    needs: [download_src]
-    steps:
-    - name: Download .git artifact
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      uses: actions/download-artifact@v1
-      with:
-        name: linkerd2-src-${{ github.sha }}
-        path: ${{ runner.temp }}
-    - name: Clone source
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      run: |
-        tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
-        git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
-    - name: Docker SSH setup
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      run: |
-        mkdir -p ~/.ssh/
-        touch ~/.ssh/id && chmod 600 ~/.ssh/id
-        echo "${{ secrets.DOCKER_SSH_CONFIG }}"  > ~/.ssh/config
-        echo "${{ secrets.DOCKER_PRIVATE_KEY }}" > ~/.ssh/id
-        echo "${{ secrets.DOCKER_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-        ssh linkerd-docker docker version
-    - name: Kind cluster setup
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      env:
-        DOCKER_HOST: ssh://linkerd-docker
-      run: |
-        TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
-        export KIND_CLUSTER=github-$TAG-${{ matrix.integration_test }}
-        export CUSTOM_DOMAIN_CONFIG="test/testdata/custom_cluster_domain_config.yaml"
-        # retry cluster creation once in case of port conflict or kubeadm failure
-        if [ "${{ matrix.integration_test }}" == "custom_domain" ]
-        then
-          bin/kind create cluster --name=$KIND_CLUSTER --wait=2m --loglevel debug --config=$CUSTOM_DOMAIN_CONFIG ||
-            bin/kind create cluster --name=$KIND_CLUSTER --wait=2m --loglevel debug --config=$CUSTOM_DOMAIN_CONFIG
-        else
-          bin/kind create cluster --name=$KIND_CLUSTER --wait=2m --loglevel debug ||
-            bin/kind create cluster --name=$KIND_CLUSTER --wait=2m --loglevel debug
-        fi
-        scp $(bin/kind get kubeconfig-path --name=$KIND_CLUSTER) linkerd-docker:/tmp
+  # kind_integration:
+  #   strategy:
+  #     matrix:
+  #       integration_test: [deep, upgrade, helm, custom_domain, external_issuer]
+  #   needs: [docker_pull, docker_build, kind_setup]
+  #   name: Integration tests (${{ matrix.integration_test }})
+  #   runs-on: ubuntu-18.04
+  #   steps:
+  #   - name: Download .git artifact
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     uses: actions/download-artifact@v1
+  #     with:
+  #       name: linkerd2-src-${{ github.sha }}
+  #       path: ${{ runner.temp }}
+  #   - name: Clone source
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     run: |
+  #       tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
+  #       git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
+  #   - name: Docker SSH setup
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     env:
+  #       DOCKER_ADDRESS: ${{ secrets.DOCKER_ADDRESS }}
+  #       DOCKER_HOST_PRIVATE_KEY: ${{ secrets.DOCKER_HOST_PRIVATE_KEY }}
+  #     run: |
+  #       mkdir -p ~/.ssh/
+  #       echo "$DOCKER_HOST_PRIVATE_KEY" > ~/.ssh/id_rsa
+  #       chmod 600 ~/.ssh/id_rsa
+  #       ssh-keyscan $DOCKER_ADDRESS >> ~/.ssh/known_hosts
+  #   - name: Kind load docker images
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     env:
+  #       DOCKER_ADDRESS: ${{ secrets.DOCKER_ADDRESS }}
+  #     run: |
+  #       TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
+  #       export KIND_CLUSTER=github-$TAG-${{ matrix.integration_test }}
+  #       ssh -T github@$DOCKER_ADDRESS &> /dev/null << EOF
+  #         # TODO: This is using the kind binary on the remote host.
+  #         kind load docker-image gcr.io/linkerd-io/proxy-init:v1.2.0 --name=$KIND_CLUSTER
+  #         kind load docker-image prom/prometheus:v2.11.1 --name=$KIND_CLUSTER
+  #         for IMG in controller grafana proxy web ; do
+  #           kind load docker-image gcr.io/linkerd-io/\$IMG:$TAG --name=$KIND_CLUSTER
+  #         done
+  #       EOF
+  #   - name: Install linkerd CLI
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     env:
+  #       DOCKER_HOST: ssh://github@${{ secrets.DOCKER_ADDRESS }}
+  #     run: |
+  #       TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
+  #       image="gcr.io/linkerd-io/cli-bin:$TAG"
+  #       id=$(bin/docker create $image)
+  #       bin/docker cp "$id:/out/linkerd-linux" "$HOME/.linkerd"
+  #       $HOME/.linkerd version --client
+  #       # validate CLI version matches the repo
+  #       [[ "$TAG" == "$($HOME/.linkerd version --short --client)" ]]
+  #       echo "Installed Linkerd CLI version: $TAG"
+  #   - name: Run integration tests
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     env:
+  #       DOCKER_ADDRESS: ${{ secrets.DOCKER_ADDRESS }}
+  #       DOCKER_HOST: ssh://github@${{ secrets.DOCKER_ADDRESS }}
+  #       GITCOOKIE_SH: ${{ secrets.GITCOOKIE_SH }}
+  #     run: |
+  #       export PATH="`pwd`/bin:$PATH"
+  #       echo "$GITCOOKIE_SH" | bash
+  #       # TODO: pin Go version
+  #       go version
+  #       TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
+  #       export KIND_CLUSTER=github-$TAG-${{ matrix.integration_test }}
+  #       # Restore kubeconfig from remote docker host.
+  #       mkdir -p $HOME/.kube
+  #       scp github@$DOCKER_ADDRESS:/tmp/kind-config-$KIND_CLUSTER $HOME/.kube
+  #       export KUBECONFIG=$(bin/kind get kubeconfig-path --name=$KIND_CLUSTER)
+  #       # Start ssh tunnel to allow kubectl to connect via localhost.
+  #       export KIND_PORT=$(bin/kubectl config view -o jsonpath="{.clusters[?(@.name=='$KIND_CLUSTER')].cluster.server}" | cut -d':' -f3)
+  #       ssh -4 -N -L $KIND_PORT:localhost:$KIND_PORT github@$DOCKER_ADDRESS &
+  #       sleep 2 # Wait for ssh tunnel to come up.
+  #       bin/kubectl version --short # Test connection to kind cluster.
+  #       (
+  #         . bin/_test-run.sh
+  #         init_test_run $HOME/.linkerd
+  #         ${{ matrix.integration_test }}_integration_tests
+  #       )
 
-  kind_integration:
-    strategy:
-      max-parallel: 3
-      matrix:
-        integration_test: [deep, upgrade, helm, custom_domain, external_issuer]
-    needs: [docker_pull, docker_build, kind_setup]
-    name: Integration tests (${{ matrix.integration_test }})
-    runs-on: ubuntu-18.04
-    steps:
-    - name: Download .git artifact
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      uses: actions/download-artifact@v1
-      with:
-        name: linkerd2-src-${{ github.sha }}
-        path: ${{ runner.temp }}
-    - name: Clone source
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      run: |
-        tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
-        git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
-    - name: Docker SSH setup
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      run: |
-        mkdir -p ~/.ssh/
-        touch ~/.ssh/id && chmod 600 ~/.ssh/id
-        echo "${{ secrets.DOCKER_SSH_CONFIG }}"  > ~/.ssh/config
-        echo "${{ secrets.DOCKER_PRIVATE_KEY }}" > ~/.ssh/id
-        echo "${{ secrets.DOCKER_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-        ssh linkerd-docker docker version
-    - name: Kind load docker images
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      run: |
-        TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
-        export KIND_CLUSTER=github-$TAG-${{ matrix.integration_test }}
-        ssh -T linkerd-docker &> /dev/null << EOF
-          # TODO: This is using the kind binary on the remote host.
-          kind load docker-image gcr.io/linkerd-io/proxy-init:v1.2.0 --name=$KIND_CLUSTER
-          kind load docker-image prom/prometheus:v2.11.1 --name=$KIND_CLUSTER
-          for IMG in controller grafana proxy web ; do
-            kind load docker-image gcr.io/linkerd-io/\$IMG:$TAG --name=$KIND_CLUSTER
-          done
-        EOF
-    - name: Install linkerd CLI
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      env:
-        DOCKER_HOST: ssh://linkerd-docker
-      run: |
-        TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
-        image="gcr.io/linkerd-io/cli-bin:$TAG"
-        id=$(bin/docker create $image)
-        bin/docker cp "$id:/out/linkerd-linux" "$HOME/.linkerd"
-        $HOME/.linkerd version --client
-        # validate CLI version matches the repo
-        [[ "$TAG" == "$($HOME/.linkerd version --short --client)" ]]
-        echo "Installed Linkerd CLI version: $TAG"
-    - name: Run integration tests
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      env:
-        DOCKER_HOST: ssh://linkerd-docker
-        GITCOOKIE_SH: ${{ secrets.GITCOOKIE_SH }}
-      run: |
-        export PATH="`pwd`/bin:$PATH"
-        echo "$GITCOOKIE_SH" | bash
-        # TODO: pin Go version
-        go version
-        TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
-        export KIND_CLUSTER=github-$TAG-${{ matrix.integration_test }}
-        # Restore kubeconfig from remote docker host.
-        mkdir -p $HOME/.kube
-        scp linkerd-docker:/tmp/kind-config-$KIND_CLUSTER $HOME/.kube
-        export KUBECONFIG=$(bin/kind get kubeconfig-path --name=$KIND_CLUSTER)
-        # Start ssh tunnel to allow kubectl to connect via localhost.
-        export KIND_PORT=$(bin/kubectl config view -o jsonpath="{.clusters[?(@.name=='$KIND_CLUSTER')].cluster.server}" | cut -d':' -f3)
-        ssh -4 -N -L $KIND_PORT:localhost:$KIND_PORT linkerd-docker &
-        sleep 2 # Wait for ssh tunnel to come up.
-        bin/kubectl version --short # Test connection to kind cluster.
-        (
-          . bin/_test-run.sh
-          init_test_run $HOME/.linkerd
-          ${{ matrix.integration_test }}_integration_tests
-        )
-
-  kind_cleanup:
-    if: always()
-    strategy:
-      fail-fast: false # always attempt to cleanup all clusters
-      matrix:
-        integration_test: [deep, upgrade, helm, custom_domain, external_issuer]
-    needs: [kind_integration]
-    name: Cluster cleanup (${{ matrix.integration_test }})
-    runs-on: ubuntu-18.04
-    steps:
-    - name: Download .git artifact
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      uses: actions/download-artifact@v1
-      with:
-        name: linkerd2-src-${{ github.sha }}
-        path: ${{ runner.temp }}
-    - name: Clone source
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      run: |
-        tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
-        git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
-    # for debugging
-    - name: Dump env
-      run: |
-        env | sort
-    - name: Dump GitHub context
-      env:
-        GITHUB_CONTEXT: ${{ toJson(github) }}
-      run: echo "$GITHUB_CONTEXT"
-    - name: Dump job context
-      env:
-        JOB_CONTEXT: ${{ toJson(job) }}
-      run: echo "$JOB_CONTEXT"
-    - name: Docker SSH setup
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      run: |
-        mkdir -p ~/.ssh/
-        touch ~/.ssh/id && chmod 600 ~/.ssh/id
-        echo "${{ secrets.DOCKER_SSH_CONFIG }}"  > ~/.ssh/config
-        echo "${{ secrets.DOCKER_PRIVATE_KEY }}" > ~/.ssh/id
-        echo "${{ secrets.DOCKER_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-        ssh linkerd-docker docker version
-    - name: Kind cluster cleanup
-      if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-      env:
-        DOCKER_HOST: ssh://linkerd-docker
-      run: |
-        TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
-        export KIND_CLUSTER=github-$TAG-${{ matrix.integration_test }}
-        bin/kind delete cluster --name=$KIND_CLUSTER
+  # kind_cleanup:
+  #   if: always()
+  #   strategy:
+  #     fail-fast: false # always attempt to cleanup all clusters
+  #     matrix:
+  #       integration_test: [deep, upgrade, helm, custom_domain, external_issuer]
+  #   needs: [kind_integration]
+  #   name: Cluster cleanup (${{ matrix.integration_test }})
+  #   runs-on: ubuntu-18.04
+  #   steps:
+  #   - name: Download .git artifact
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     uses: actions/download-artifact@v1
+  #     with:
+  #       name: linkerd2-src-${{ github.sha }}
+  #       path: ${{ runner.temp }}
+  #   - name: Clone source
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     run: |
+  #       tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
+  #       git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
+  #   # for debugging
+  #   - name: Dump env
+  #     run: |
+  #       env | sort
+  #   - name: Dump GitHub context
+  #     env:
+  #       GITHUB_CONTEXT: ${{ toJson(github) }}
+  #     run: echo "$GITHUB_CONTEXT"
+  #   - name: Dump job context
+  #     env:
+  #       JOB_CONTEXT: ${{ toJson(job) }}
+  #     run: echo "$JOB_CONTEXT"
+  #   - name: Docker SSH setup
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     env:
+  #       DOCKER_ADDRESS: ${{ secrets.DOCKER_ADDRESS }}
+  #       DOCKER_HOST_PRIVATE_KEY: ${{ secrets.DOCKER_HOST_PRIVATE_KEY }}
+  #     run: |
+  #       mkdir -p ~/.ssh/
+  #       echo "$DOCKER_HOST_PRIVATE_KEY" > ~/.ssh/id_rsa
+  #       chmod 600 ~/.ssh/id_rsa
+  #       ssh-keyscan $DOCKER_ADDRESS >> ~/.ssh/known_hosts
+  #   - name: Kind cluster cleanup
+  #     if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+  #     env:
+  #       DOCKER_HOST: ssh://github@${{ secrets.DOCKER_ADDRESS }}
+  #     run: |
+  #       TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
+  #       export KIND_CLUSTER=github-$TAG-${{ matrix.integration_test }}
+  #       bin/kind delete cluster --name=$KIND_CLUSTER
 
   #
   # Docker deploy and cloud integration tests run for:
@@ -462,7 +467,8 @@ jobs:
   docker_deploy:
     name: Docker deploy
     runs-on: ubuntu-18.04
-    needs: [validate_go_deps, go_unit_tests, go_lint, js_unit_tests, kind_integration, kind_cleanup]
+    # needs: [validate_go_deps, go_unit_tests, go_lint, js_unit_tests, kind_integration, kind_cleanup]
+    needs: [validate_go_deps, go_unit_tests, go_lint, js_unit_tests ]
     steps:
     - name: Download .git artifact
       if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
@@ -475,6 +481,16 @@ jobs:
       run: |
         tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
         git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
+    - name: Docker SSH setup
+      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+      env:
+        DOCKER_ADDRESS: ${{ secrets.DOCKER_ADDRESS }}
+        DOCKER_HOST_PRIVATE_KEY: ${{ secrets.DOCKER_HOST_PRIVATE_KEY }}
+      run: |
+        mkdir -p ~/.ssh/
+        echo "$DOCKER_HOST_PRIVATE_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan $DOCKER_ADDRESS >> ~/.ssh/known_hosts
     - name: Configure gcloud
       if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
       env:
@@ -482,7 +498,6 @@ jobs:
         CLOUD_SDK_SERVICE_ACCOUNT_KEY: ${{ secrets.CLOUD_SDK_SERVICE_ACCOUNT_KEY }}
         GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
         GCP_ZONE: ${{ secrets.GCP_ZONE }}
-        GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
       run: |
         # Install gcloud and kubectl.
         echo "$CLOUD_SDK_SERVICE_ACCOUNT_KEY" > .gcp.json
@@ -492,152 +507,74 @@ jobs:
           install_gcloud "$dir"
           gcloud components install kubectl
           # Configure gcloud with a service account.
-          set_gcloud_config "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
-          # Get a kubernetes context.
-          get_k8s_ctx "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
+          set_gcloud_project "$GCP_PROJECT" "$GCP_ZONE"
         )
         . "$dir/path.bash.inc"
         gcloud auth configure-docker
-        bin/kubectl version --short
-    - name: Docker SSH setup
-      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-      run: |
-        mkdir -p ~/.ssh/
-        touch ~/.ssh/id && chmod 600 ~/.ssh/id
-        echo "${{ secrets.DOCKER_SSH_CONFIG }}"  > ~/.ssh/config
-        echo "${{ secrets.DOCKER_PRIVATE_KEY }}" > ~/.ssh/id
-        echo "${{ secrets.DOCKER_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-        ssh linkerd-docker docker version
     - name: Docker push
       if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
       env:
-        DOCKER_HOST: ssh://linkerd-docker
+        DOCKER_HOST: ssh://github@${{ secrets.DOCKER_ADDRESS }}
       run: |
         export PATH="`pwd`/bin:$PATH"
-        TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
-        bin/docker-push-deps
-        bin/docker-push $TAG
-        bin/docker-retag-all $TAG master
-        bin/docker-push master
-
-  cloud_integration:
-    name: Cloud integration tests
-    runs-on: ubuntu-18.04
-    needs: [docker_deploy]
-    steps:
-    - name: Download .git artifact
-      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-      uses: actions/download-artifact@v1
-      with:
-        name: linkerd2-src-${{ github.sha }}
-        path: ${{ runner.temp }}
-    - name: Clone source
-      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-      run: |
-        tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
-        git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
-    - name: Configure gcloud
-      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-      env:
-        CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
-        CLOUD_SDK_SERVICE_ACCOUNT_KEY: ${{ secrets.CLOUD_SDK_SERVICE_ACCOUNT_KEY }}
-        GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
-        GCP_ZONE: ${{ secrets.GCP_ZONE }}
-        GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
-      run: |
-        # Install gcloud and kubectl.
-        echo "$CLOUD_SDK_SERVICE_ACCOUNT_KEY" > .gcp.json
-        dir="${CLOUDSDK_INSTALL_DIR:-${HOME}}/google-cloud-sdk"
-        (
-          . bin/_gcp.sh ;
-          install_gcloud "$dir"
-          gcloud components install kubectl
-          # Configure gcloud with a service account.
-          set_gcloud_config "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
-          # Get a kubernetes context.
-          get_k8s_ctx "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
-        )
-        . "$dir/path.bash.inc"
-        gcloud auth configure-docker
-        bin/kubectl version --short
-    - name: Install linkerd CLI
-      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-      run: |
-        TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
-        image="gcr.io/linkerd-io/cli-bin:$TAG"
-        id=$(bin/docker create $image)
-        bin/docker cp "$id:/out/linkerd-linux" "$HOME/.linkerd"
-        $HOME/.linkerd version --client
-        # validate CLI version matches the repo
-        [[ "$TAG" == "$($HOME/.linkerd version --short --client)" ]]
-        echo "Installed Linkerd CLI version: $TAG"
-    - name: Run integration tests
-      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-      env:
-        GITCOOKIE_SH: ${{ secrets.GITCOOKIE_SH }}
-      run: |
-        export PATH="`pwd`/bin:$PATH"
-        echo "$GITCOOKIE_SH" | bash
-        version="$($HOME/.linkerd version --client --short | tr -cd '[:alnum:]-')"
-        bin/test-run $HOME/.linkerd linkerd-$version
-    - name: CNI tests
-      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-      run: |
-        export TAG="$($HOME/.linkerd version --client --short)"
-        go test -cover -race -v -mod=readonly ./cni-plugin/test -integration-tests
-
-  cloud_cleanup:
-    if: always()
-    name: Cloud cleanup
-    runs-on: ubuntu-18.04
-    needs: [cloud_integration]
-    steps:
-    - name: Download .git artifact
-      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-      uses: actions/download-artifact@v1
-      with:
-        name: linkerd2-src-${{ github.sha }}
-        path: ${{ runner.temp }}
-    - name: Clone source
-      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-      run: |
-        tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
-        git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
-    - name: Configure gcloud
-      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-      env:
-        CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
-        CLOUD_SDK_SERVICE_ACCOUNT_KEY: ${{ secrets.CLOUD_SDK_SERVICE_ACCOUNT_KEY }}
-        GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
-        GCP_ZONE: ${{ secrets.GCP_ZONE }}
-        GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
-      run: |
-        # Install gcloud and kubectl.
-        echo "$CLOUD_SDK_SERVICE_ACCOUNT_KEY" > .gcp.json
-        dir="${CLOUDSDK_INSTALL_DIR:-${HOME}}/google-cloud-sdk"
-        (. bin/_gcp.sh ;
-          install_gcloud "$dir"
-          gcloud components install kubectl
-          # Configure gcloud with a service account.
-          set_gcloud_config "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
-          # Get a kubernetes context.
-          get_k8s_ctx "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
-        )
-        . "$dir/path.bash.inc"
-        gcloud auth configure-docker
-        bin/kubectl version --short
-    - name: Cleanup
-      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-      run: |
-        export PATH="`pwd`/bin:$PATH"
-        bin/test-cleanup
+        #### Commenting this for workflow development work ####
+        # TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
+        # bin/docker-push-deps
+        # bin/docker-push $TAG
+        # bin/docker-retag-all $TAG master
+        # bin/docker-push master
+  # cloud_cleanup:
+  #   if: always()
+  #   name: Cloud cleanup
+  #   runs-on: ubuntu-18.04
+  #   needs: [cloud_integration]
+  #   steps:
+  #   - name: Download .git artifact
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     uses: actions/download-artifact@v1
+  #     with:
+  #       name: linkerd2-src-${{ github.sha }}
+  #       path: ${{ runner.temp }}
+  #   - name: Clone source
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     run: |
+  #       tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
+  #       git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
+  #   - name: Configure gcloud
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     env:
+  #       CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
+  #       CLOUD_SDK_SERVICE_ACCOUNT_KEY: ${{ secrets.CLOUD_SDK_SERVICE_ACCOUNT_KEY }}
+  #       GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+  #       GCP_ZONE: ${{ secrets.GCP_ZONE }}
+  #       GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
+  #     run: |
+  #       # Install gcloud and kubectl.
+  #       echo "$CLOUD_SDK_SERVICE_ACCOUNT_KEY" > .gcp.json
+  #       dir="${CLOUDSDK_INSTALL_DIR:-${HOME}}/google-cloud-sdk"
+  #       (. bin/_gcp.sh ;
+  #         install_gcloud "$dir"
+  #         gcloud components install kubectl
+  #         # Configure gcloud with a service account.
+  #         set_gcloud_cluster "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
+  #         # Get a kubernetes context.
+  #         get_k8s_ctx "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
+  #       )
+  #       . "$dir/path.bash.inc"
+  #       gcloud auth configure-docker
+  #       bin/kubectl version --short
+  #   - name: Cleanup
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     run: |
+  #       export PATH="`pwd`/bin:$PATH"
+  #       bin/test-cleanup
 
   gcp_cloud_integration:
     strategy:
       fail-fast: false # always attempt to cleanup all clusters
       matrix:
-        cloud_integration_test: [deep, upgrade, helm, custom_domain]
-    name: GCP Cloud integration tests (${{ matrix.cloud_integration_test }})
+        cloud_integration_test: [deep, upgrade, helm, custom_domain, external_issuer]
+    name: GCP Cloud integration tests - ${{ matrix.cloud_integration_test }}
     runs-on: ubuntu-18.04
     needs: [docker_deploy]
     steps:
@@ -666,7 +603,7 @@ jobs:
         # Flagging current cloud 
         target_cloud="gcp"
         # Creating a unique name for this commit
-        export GKE_CLUSTER=${{ matrix.cloud_integration_test }}-${$GITHUB_SHA::6}
+        export GKE_CLUSTER=$(tr -d '_' <<< ${{ matrix.cloud_integration_test }}-${GITHUB_SHA::6})
         (
           . bin/_gcp.sh ;
           install_gcloud "$dir"
@@ -675,7 +612,7 @@ jobs:
           set_gcloud_project "$GCP_PROJECT" "$GCP_ZONE"
           # Loading cluster config from project
           k8s_version=$(get_default_k8s_version)
-          . test/testdata/cloud_config/"${target_cloud}/${{ matrix.cloud_integration_test }}.conf" ;
+          . test/testdata/cloud_config/${target_cloud}/${{ matrix.cloud_integration_test }}.conf
           # Spawn a new cluster
           create_cluster "${GKE_CLUSTER}" "${k8s_version}" "${cluster_size}" "${machine_type}"
           # Get a kubernetes context.
@@ -686,16 +623,22 @@ jobs:
         bin/kubectl version --short
     - name: Install linkerd CLI
       if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+      env:
+        DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
       run: |
-        TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
-        image="gcr.io/linkerd-io/cli-bin:$TAG"
-        id=$(bin/docker create $image)
-        bin/docker cp "$id:/out/linkerd-linux" "$HOME/.linkerd"
-        $HOME/.linkerd version --client
-        # validate CLI version matches the repo
-        [[ "$TAG" == "$($HOME/.linkerd version --short --client)" ]]
-        echo "Installed Linkerd CLI version: $TAG"
-    - name: Run integration tests
+        #### Commenting this for workflow development work ####
+        # TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
+        # image="${DOCKER_REGISTRY}/cli-bin:$TAG"
+        # id=$(bin/docker create $image)
+        # bin/docker cp "$id:/out/linkerd-linux" "$HOME/.linkerd"
+        # $HOME/.linkerd version --client
+        # # validate CLI version matches the repo
+        # [[ "$TAG" == "$($HOME/.linkerd version --short --client)" ]]
+        # echo "Installed Linkerd CLI version: $TAG"
+        #### Adding this for workflow development work ####
+        curl https://run.linkerd.io/install-edge | sh
+        ln -sf ~/.linkerd2/bin/linkerd ~/.linkerd
+    - name: Run integration tests - ${{ matrix.cloud_integration_test }}
       if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
       env:
         GITCOOKIE_SH: ${{ secrets.GITCOOKIE_SH }}
@@ -703,20 +646,24 @@ jobs:
         export PATH="`pwd`/bin:$PATH"
         echo "$GITCOOKIE_SH" | bash
         version="$($HOME/.linkerd version --client --short | tr -cd '[:alnum:]-')"
-        bin/test-run $HOME/.linkerd linkerd-$version
+        # version=git-09703a58
+        (
+          . bin/_test-run.sh
+          init_test_run $HOME/.linkerd
+          ${{ matrix.cloud_integration_test }}_integration_tests
+        )
     - name: CNI tests
       if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
       run: |
         export TAG="$($HOME/.linkerd version --client --short)"
         go test -cover -race -v -mod=readonly ./cni-plugin/test -integration-tests
-
   gcp_cloud_cleanup:
     if: always()
     strategy:
       fail-fast: false # always attempt to cleanup all clusters
       matrix:
-        cloud_integration_test: [deep, upgrade, helm, custom_domain]
-    name: GCP Cloud Cleanup (${{ matrix.cloud_integration_test }})
+        cloud_integration_test: [deep, upgrade, helm, custom_domain, external_issuer]
+    name: GCP Cloud Cleanup - ${{ matrix.cloud_integration_test }}
     runs-on: ubuntu-18.04
     needs: [gcp_cloud_integration]
     steps:
@@ -743,67 +690,66 @@ jobs:
         echo "$CLOUD_SDK_SERVICE_ACCOUNT_KEY" > .gcp.json
         dir="${CLOUDSDK_INSTALL_DIR:-${HOME}}/google-cloud-sdk"
         # Creating a unique name for this commit
-        export GKE_CLUSTER=${{ matrix.cloud_integration_test }}-${$GITHUB_SHA::6}
+        export GKE_CLUSTER=$(tr -d '_' <<< ${{ matrix.cloud_integration_test }}-${GITHUB_SHA::6})
         (. bin/_gcp.sh ;
           install_gcloud "$dir"
           gcloud components install kubectl
           # Configure gcloud with a service account.
-          set_gcloud_config "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
+          set_gcloud_cluster "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
           # Cleanup Cluster
           destroy_cluster "$GKE_CLUSTER"
         )
-
   #
   # Helm chart artifact deploy run for:
   # - every tag push
   #
 
-  chart_deploy:
-    name: Helm chart deploy
-    runs-on: ubuntu-18.04
-    needs: [cloud_integration]
-    steps:
-    - name: Download .git artifact
-      if: startsWith(github.ref, 'refs/tags')
-      uses: actions/download-artifact@v1
-      with:
-        name: linkerd2-src-${{ github.sha }}
-        path: ${{ runner.temp }}
-    - name: Clone source
-      if: startsWith(github.ref, 'refs/tags')
-      run: |
-        tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
-        git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
-    - name: Configure gsutils
-      if: startsWith(github.ref, 'refs/tags')
-      env:
-        CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
-        CLOUD_SDK_SERVICE_ACCOUNT_KEY: ${{ secrets.LINKERD_SITE_TOKEN }}
-        GCP_PROJECT: ${{ secrets.LINKERD_SITE_PROJECT }}
-        GCP_ZONE: ${{ secrets.LINKERD_SITE_ZONE }}
-        GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
-      run: |
-        # Install gcloud and gsutil.
-        echo "$CLOUD_SDK_SERVICE_ACCOUNT_KEY" > .gcp.json
-        dir="${CLOUDSDK_INSTALL_DIR:-${HOME}}/google-cloud-sdk"
-        (
-          . bin/_gcp.sh ;
-          install_gcloud "$dir"
-          gcloud components install gsutil
-          # Configure gcloud with a service account.
-          set_gcloud_config "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
-        )
-        . "$dir/path.bash.inc"
-        mkdir -p target/helm
-    - name: Edge Helm chart creation and upload
-      if: startsWith(github.ref, 'refs/tags/edge')
-      run: |
-        gsutil cp gs://helm.linkerd.io/edge/index.yaml target/helm/index-pre.yaml
-        bin/helm-build package
-        gsutil rsync target/helm gs://helm.linkerd.io/edge
-    - name: Stable Helm chart creation and upload
-      if: startsWith(github.ref, 'refs/tags/stable')
-      run: |
-        gsutil cp gs://helm.linkerd.io/stable/index.yaml target/helm/index-pre.yaml
-        bin/helm-build package
-        gsutil rsync target/helm gs://helm.linkerd.io/stable
+  # chart_deploy:
+    # name: Helm chart deploy
+    # runs-on: ubuntu-18.04
+    # needs: [cloud_integration]
+    # steps:
+    # - name: Download .git artifact
+    #   if: startsWith(github.ref, 'refs/tags')
+    #   uses: actions/download-artifact@v1
+    #   with:
+    #     name: linkerd2-src-${{ github.sha }}
+    #     path: ${{ runner.temp }}
+    # - name: Clone source
+    #   if: startsWith(github.ref, 'refs/tags')
+    #   run: |
+    #     tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
+    #     git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
+    # - name: Configure gsutils
+    #   if: startsWith(github.ref, 'refs/tags')
+    #   env:
+    #     CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
+    #     CLOUD_SDK_SERVICE_ACCOUNT_KEY: ${{ secrets.LINKERD_SITE_TOKEN }}
+    #     GCP_PROJECT: ${{ secrets.LINKERD_SITE_PROJECT }}
+    #     GCP_ZONE: ${{ secrets.LINKERD_SITE_ZONE }}
+    #     GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
+    #   run: |
+    #     # Install gcloud and gsutil.
+    #     echo "$CLOUD_SDK_SERVICE_ACCOUNT_KEY" > .gcp.json
+    #     dir="${CLOUDSDK_INSTALL_DIR:-${HOME}}/google-cloud-sdk"
+    #     (
+    #       . bin/_gcp.sh ;
+    #       install_gcloud "$dir"
+    #       gcloud components install gsutil
+    #       # Configure gcloud with a service account.
+    #       set_gcloud_cluster "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
+    #     )
+    #     . "$dir/path.bash.inc"
+    #     mkdir -p target/helm
+    # - name: Edge Helm chart creation and upload
+    #   if: startsWith(github.ref, 'refs/tags/edge')
+    #   run: |
+    #     gsutil cp gs://helm.linkerd.io/edge/index.yaml target/helm/index-pre.yaml
+    #     bin/helm-build package
+    #     gsutil rsync target/helm gs://helm.linkerd.io/edge
+    # - name: Stable Helm chart creation and upload
+    #   if: startsWith(github.ref, 'refs/tags/stable')
+    #   run: |
+    #     gsutil cp gs://helm.linkerd.io/stable/index.yaml target/helm/index-pre.yaml
+    #     bin/helm-build package
+    #     gsutil rsync target/helm gs://helm.linkerd.io/stable
