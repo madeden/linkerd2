@@ -520,8 +520,124 @@ jobs:
         bin/docker-retag-all $TAG master
         bin/docker-push master
 
-  cloud_integration:
-    name: Cloud integration tests
+  # cloud_integration:
+  #   name: Cloud integration tests
+  #   runs-on: ubuntu-18.04
+  #   needs: [docker_deploy]
+  #   steps:
+  #   - name: Download .git artifact
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     uses: actions/download-artifact@v1
+  #     with:
+  #       name: linkerd2-src-${{ github.sha }}
+  #       path: ${{ runner.temp }}
+  #   - name: Clone source
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     run: |
+  #       tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
+  #       git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
+  #   - name: Configure gcloud
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     env:
+  #       CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
+  #       CLOUD_SDK_SERVICE_ACCOUNT_KEY: ${{ secrets.CLOUD_SDK_SERVICE_ACCOUNT_KEY }}
+  #       GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+  #       GCP_ZONE: ${{ secrets.GCP_ZONE }}
+  #       GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
+  #     run: |
+  #       # Install gcloud and kubectl.
+  #       echo "$CLOUD_SDK_SERVICE_ACCOUNT_KEY" > .gcp.json
+  #       dir="${CLOUDSDK_INSTALL_DIR:-${HOME}}/google-cloud-sdk"
+  #       (
+  #         . bin/_gcp.sh ;
+  #         install_gcloud "$dir"
+  #         gcloud components install kubectl
+  #         # Configure gcloud with a service account.
+  #         set_gcloud_config "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
+  #         # Get a kubernetes context.
+  #         get_k8s_ctx "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
+  #       )
+  #       . "$dir/path.bash.inc"
+  #       gcloud auth configure-docker
+  #       bin/kubectl version --short
+  #   - name: Install linkerd CLI
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     run: |
+  #       TAG="$(CI_FORCE_CLEAN=1 bin/root-tag)"
+  #       image="gcr.io/linkerd-io/cli-bin:$TAG"
+  #       id=$(bin/docker create $image)
+  #       bin/docker cp "$id:/out/linkerd-linux" "$HOME/.linkerd"
+  #       $HOME/.linkerd version --client
+  #       # validate CLI version matches the repo
+  #       [[ "$TAG" == "$($HOME/.linkerd version --short --client)" ]]
+  #       echo "Installed Linkerd CLI version: $TAG"
+  #   - name: Run integration tests
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     env:
+  #       GITCOOKIE_SH: ${{ secrets.GITCOOKIE_SH }}
+  #     run: |
+  #       export PATH="`pwd`/bin:$PATH"
+  #       echo "$GITCOOKIE_SH" | bash
+  #       version="$($HOME/.linkerd version --client --short | tr -cd '[:alnum:]-')"
+  #       bin/test-run $HOME/.linkerd linkerd-$version
+  #   - name: CNI tests
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     run: |
+  #       export TAG="$($HOME/.linkerd version --client --short)"
+  #       go test -cover -race -v -mod=readonly ./cni-plugin/test -integration-tests
+
+  # cloud_cleanup:
+  #   if: always()
+  #   name: Cloud cleanup
+  #   runs-on: ubuntu-18.04
+  #   needs: [cloud_integration]
+  #   steps:
+  #   - name: Download .git artifact
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     uses: actions/download-artifact@v1
+  #     with:
+  #       name: linkerd2-src-${{ github.sha }}
+  #       path: ${{ runner.temp }}
+  #   - name: Clone source
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     run: |
+  #       tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
+  #       git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
+  #   - name: Configure gcloud
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     env:
+  #       CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
+  #       CLOUD_SDK_SERVICE_ACCOUNT_KEY: ${{ secrets.CLOUD_SDK_SERVICE_ACCOUNT_KEY }}
+  #       GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+  #       GCP_ZONE: ${{ secrets.GCP_ZONE }}
+  #       GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
+  #     run: |
+  #       # Install gcloud and kubectl.
+  #       echo "$CLOUD_SDK_SERVICE_ACCOUNT_KEY" > .gcp.json
+  #       dir="${CLOUDSDK_INSTALL_DIR:-${HOME}}/google-cloud-sdk"
+  #       (. bin/_gcp.sh ;
+  #         install_gcloud "$dir"
+  #         gcloud components install kubectl
+  #         # Configure gcloud with a service account.
+  #         set_gcloud_config "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
+  #         # Get a kubernetes context.
+  #         get_k8s_ctx "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
+  #       )
+  #       . "$dir/path.bash.inc"
+  #       gcloud auth configure-docker
+  #       bin/kubectl version --short
+  #   - name: Cleanup
+  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+  #     run: |
+  #       export PATH="`pwd`/bin:$PATH"
+  #       bin/test-cleanup
+
+  gcp_cloud_integration:
+    strategy:
+      fail-fast: false # always attempt to cleanup all clusters
+      matrix:
+        cloud_integration_test: [deep, upgrade, helm, custom_domain]
+    name: GCP Cloud integration tests (${{ matrix.cloud_integration_test }})
     runs-on: ubuntu-18.04
     needs: [docker_deploy]
     steps:
@@ -536,24 +652,32 @@ jobs:
       run: |
         tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
         git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
-    - name: Configure gcloud
+    - name: Configure gcloud and spawn temporary K8s cluster
       if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
       env:
         CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
         CLOUD_SDK_SERVICE_ACCOUNT_KEY: ${{ secrets.CLOUD_SDK_SERVICE_ACCOUNT_KEY }}
         GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
         GCP_ZONE: ${{ secrets.GCP_ZONE }}
-        GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
       run: |
         # Install gcloud and kubectl.
         echo "$CLOUD_SDK_SERVICE_ACCOUNT_KEY" > .gcp.json
         dir="${CLOUDSDK_INSTALL_DIR:-${HOME}}/google-cloud-sdk"
+        # Flagging current cloud 
+        target_cloud="gcp"
+        # Creating a unique name for this commit
+        export GKE_CLUSTER=${{ matrix.cloud_integration_test }}-${$GITHUB_SHA::6}
         (
           . bin/_gcp.sh ;
           install_gcloud "$dir"
           gcloud components install kubectl
           # Configure gcloud with a service account.
-          set_gcloud_config "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
+          set_gcloud_project "$GCP_PROJECT" "$GCP_ZONE"
+          # Loading cluster config from project
+          k8s_version=$(get_default_k8s_version)
+          . test/testdata/cloud_config/"${target_cloud}/${{ matrix.cloud_integration_test }}.conf" ;
+          # Spawn a new cluster
+          create_cluster "${GKE_CLUSTER}" "${k8s_version}" "${cluster_size}" "${machine_type}"
           # Get a kubernetes context.
           get_k8s_ctx "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
         )
@@ -586,11 +710,15 @@ jobs:
         export TAG="$($HOME/.linkerd version --client --short)"
         go test -cover -race -v -mod=readonly ./cni-plugin/test -integration-tests
 
-  cloud_cleanup:
+  gcp_cloud_cleanup:
     if: always()
-    name: Cloud cleanup
+    strategy:
+      fail-fast: false # always attempt to cleanup all clusters
+      matrix:
+        cloud_integration_test: [deep, upgrade, helm, custom_domain]
+    name: GCP Cloud Cleanup (${{ matrix.cloud_integration_test }})
     runs-on: ubuntu-18.04
-    needs: [cloud_integration]
+    needs: [gcp_cloud_integration]
     steps:
     - name: Download .git artifact
       if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
@@ -603,34 +731,27 @@ jobs:
       run: |
         tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
         git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
-    - name: Configure gcloud
+    - name: Configure gcloud and cleanup temporary K8s cluster
       if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
       env:
         CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
         CLOUD_SDK_SERVICE_ACCOUNT_KEY: ${{ secrets.CLOUD_SDK_SERVICE_ACCOUNT_KEY }}
         GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
         GCP_ZONE: ${{ secrets.GCP_ZONE }}
-        GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
       run: |
         # Install gcloud and kubectl.
         echo "$CLOUD_SDK_SERVICE_ACCOUNT_KEY" > .gcp.json
         dir="${CLOUDSDK_INSTALL_DIR:-${HOME}}/google-cloud-sdk"
+        # Creating a unique name for this commit
+        export GKE_CLUSTER=${{ matrix.cloud_integration_test }}-${$GITHUB_SHA::6}
         (. bin/_gcp.sh ;
           install_gcloud "$dir"
           gcloud components install kubectl
           # Configure gcloud with a service account.
           set_gcloud_config "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
-          # Get a kubernetes context.
-          get_k8s_ctx "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
+          # Cleanup Cluster
+          destroy_cluster "$GKE_CLUSTER"
         )
-        . "$dir/path.bash.inc"
-        gcloud auth configure-docker
-        bin/kubectl version --short
-    - name: Cleanup
-      if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-      run: |
-        export PATH="`pwd`/bin:$PATH"
-        bin/test-cleanup
 
   #
   # Helm chart artifact deploy run for:
