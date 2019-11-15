@@ -101,10 +101,7 @@ jobs:
         # for f in $( grep -lR --include=Dockerfile\* go-deps: . ) ; do
         #   validate_go_deps_tag $f
         # done
-<<<<<<< HEAD
-=======
 
->>>>>>> temp commit - force point version to known good for testing purposes
   go_unit_tests:
     name: Go unit tests
     runs-on: ubuntu-18.04
@@ -129,10 +126,7 @@ jobs:
         # TODO: validate bin/protoc-go.sh does not dirty the repo
         #### Commenting this for workflow development work ####
         # go test -cover -race -v -mod=readonly ./...
-<<<<<<< HEAD
-=======
 
->>>>>>> temp commit - force point version to known good for testing purposes
   go_lint:
     name: Go lint
     runs-on: ubuntu-18.04
@@ -158,10 +152,7 @@ jobs:
         echo "$GITCOOKIE_SH" | bash
         #### Commenting this for workflow development work ####
         # bin/lint --verbose
-<<<<<<< HEAD
-=======
 
->>>>>>> temp commit - force point version to known good for testing purposes
   go_fmt:
     name: Go Format
     runs-on: ubuntu-18.04
@@ -185,10 +176,7 @@ jobs:
         echo "$GITCOOKIE_SH" | bash
         #### Commenting this for workflow development work ####
         # bin/fmt
-<<<<<<< HEAD
-=======
 
->>>>>>> temp commit - force point version to known good for testing purposes
   js_unit_tests:
     name: JS unit tests
     runs-on: ubuntu-18.04
@@ -215,10 +203,7 @@ jobs:
         #### Commenting this for workflow development work ####
         # bin/web
         # bin/web test --reporters=jest-dot-reporter
-<<<<<<< HEAD
-=======
 
->>>>>>> temp commit - force point version to known good for testing purposes
   #
   # Docker build and kind integration tests run for:
   # - every master push
@@ -292,10 +277,7 @@ jobs:
       run: |
         export PATH="`pwd`/bin:$PATH"
         # DOCKER_TRACE=1 bin/docker-build
-<<<<<<< HEAD
-=======
 
->>>>>>> temp commit - force point version to known good for testing purposes
   # kind_setup:
   #   strategy:
   #     matrix:
