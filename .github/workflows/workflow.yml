@@ -101,6 +101,10 @@ jobs:
         # for f in $( grep -lR --include=Dockerfile\* go-deps: . ) ; do
         #   validate_go_deps_tag $f
         # done
+<<<<<<< HEAD
+=======
+
+>>>>>>> temp commit - force point version to known good for testing purposes
   go_unit_tests:
     name: Go unit tests
     runs-on: ubuntu-18.04
@@ -125,6 +129,10 @@ jobs:
         # TODO: validate bin/protoc-go.sh does not dirty the repo
         #### Commenting this for workflow development work ####
         # go test -cover -race -v -mod=readonly ./...
+<<<<<<< HEAD
+=======
+
+>>>>>>> temp commit - force point version to known good for testing purposes
   go_lint:
     name: Go lint
     runs-on: ubuntu-18.04
@@ -150,6 +158,10 @@ jobs:
         echo "$GITCOOKIE_SH" | bash
         #### Commenting this for workflow development work ####
         # bin/lint --verbose
+<<<<<<< HEAD
+=======
+
+>>>>>>> temp commit - force point version to known good for testing purposes
   go_fmt:
     name: Go Format
     runs-on: ubuntu-18.04
@@ -173,6 +185,10 @@ jobs:
         echo "$GITCOOKIE_SH" | bash
         #### Commenting this for workflow development work ####
         # bin/fmt
+<<<<<<< HEAD
+=======
+
+>>>>>>> temp commit - force point version to known good for testing purposes
   js_unit_tests:
     name: JS unit tests
     runs-on: ubuntu-18.04
@@ -199,6 +215,10 @@ jobs:
         #### Commenting this for workflow development work ####
         # bin/web
         # bin/web test --reporters=jest-dot-reporter
+<<<<<<< HEAD
+=======
+
+>>>>>>> temp commit - force point version to known good for testing purposes
   #
   # Docker build and kind integration tests run for:
   # - every master push
@@ -272,6 +292,10 @@ jobs:
       run: |
         export PATH="`pwd`/bin:$PATH"
         # DOCKER_TRACE=1 bin/docker-build
+<<<<<<< HEAD
+=======
+
+>>>>>>> temp commit - force point version to known good for testing purposes
   # kind_setup:
   #   strategy:
   #     matrix:
@@ -523,51 +547,6 @@ jobs:
         # bin/docker-push $TAG
         # bin/docker-retag-all $TAG master
         # bin/docker-push master
-  # cloud_cleanup:
-  #   if: always()
-  #   name: Cloud cleanup
-  #   runs-on: ubuntu-18.04
-  #   needs: [cloud_integration]
-  #   steps:
-  #   - name: Download .git artifact
-  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-  #     uses: actions/download-artifact@v1
-  #     with:
-  #       name: linkerd2-src-${{ github.sha }}
-  #       path: ${{ runner.temp }}
-  #   - name: Clone source
-  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-  #     run: |
-  #       tar -C $RUNNER_TEMP -zxf $RUNNER_TEMP/linkerd2.$GITHUB_SHA.tar.gz
-  #       git clone $RUNNER_TEMP/.git $GITHUB_WORKSPACE
-  #   - name: Configure gcloud
-  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-  #     env:
-  #       CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
-  #       CLOUD_SDK_SERVICE_ACCOUNT_KEY: ${{ secrets.CLOUD_SDK_SERVICE_ACCOUNT_KEY }}
-  #       GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
-  #       GCP_ZONE: ${{ secrets.GCP_ZONE }}
-  #       GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
-  #     run: |
-  #       # Install gcloud and kubectl.
-  #       echo "$CLOUD_SDK_SERVICE_ACCOUNT_KEY" > .gcp.json
-  #       dir="${CLOUDSDK_INSTALL_DIR:-${HOME}}/google-cloud-sdk"
-  #       (. bin/_gcp.sh ;
-  #         install_gcloud "$dir"
-  #         gcloud components install kubectl
-  #         # Configure gcloud with a service account.
-  #         set_gcloud_cluster "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
-  #         # Get a kubernetes context.
-  #         get_k8s_ctx "$GCP_PROJECT" "$GCP_ZONE" "$GKE_CLUSTER"
-  #       )
-  #       . "$dir/path.bash.inc"
-  #       gcloud auth configure-docker
-  #       bin/kubectl version --short
-  #   - name: Cleanup
-  #     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
-  #     run: |
-  #       export PATH="`pwd`/bin:$PATH"
-  #       bin/test-cleanup
 
   gcp_cloud_integration:
     strategy:
