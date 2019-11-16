@@ -572,7 +572,7 @@ jobs:
           # Configure gcloud with a service account.
           set_gcloud_project "$GCP_PROJECT" "$GCP_ZONE"
           # Loading cluster config from project
-          k8s_version=$(get_default_k8s_version)
+          k8s_version=$(get_default_k8s_version "$GCP_ZONE")
           . test/testdata/cloud_config/${target_cloud}/${{ matrix.cloud_integration_test }}.conf
           # Spawn a new cluster
           create_cluster "${GKE_CLUSTER}" "${k8s_version}" "${cluster_size}" "${machine_type}"

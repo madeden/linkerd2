@@ -48,13 +48,16 @@ get_k8s_ctx() {
 }
 
 get_available_k8s_versions() {
+    zone="${1:-us-central1-f}"
+
     # Returns a ; separated list of valid versions 
-    gcloud container get-server-config --zone=us-central1-f --format="value(validMasterVersions:sort=1)"
+    gcloud container get-server-config --zone="${zone}" --format="value(validMasterVersions:sort=1)"
 }
 
 get_default_k8s_version() {
+    zone="${1:-us-central1-f}"
     # Returns the default cluster version available
-    gcloud container get-server-config --zone=us-central1-f --format="value(defaultClusterVersion)"
+    gcloud container get-server-config --zone="${zone}" --format="value(defaultClusterVersion)"
 }
 
 create_cluster() {
